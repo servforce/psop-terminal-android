@@ -128,6 +128,12 @@ fun UsageSelectionScreen(onClick: (UsageType) -> Unit) {
                 Text(text = stringResource(R.string.usage_translation_scene))
             }
 
+            Button(modifier = Modifier.fillMaxWidth(), onClick = {
+                onClick(UsageType.USAGE_TYPE_PSOP_DEMO)
+            }) {
+                Text(text = stringResource(R.string.usage_psop_demo))
+            }
+
         }
     }
 }

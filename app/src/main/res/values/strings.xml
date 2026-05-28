@@ -44,6 +44,7 @@
     <string name="usage_translation_scene">翻译场景</string>
     <string name="usage_tts_notifiction">TTS 与通知</string>
     <string name="usage_live_video">实时视频</string>
+    <string name="usage_psop_demo">PSOP 巡检</string>
     <string name="title_activity_live_video">实时视频</string>
 
     <string name="custom_protocol_title">自定义协议</string>

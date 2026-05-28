@@ -13,6 +13,7 @@ import com.rokid.cxrmsamples.activities.useAIScene.AISceneActivity
 import com.rokid.cxrmsamples.activities.useTeleprompter.TeleprompterSceneActivity
 import com.rokid.cxrmsamples.activities.useTranslation.TranslationSceneActivity
 import com.rokid.cxrmsamples.activities.liveVideo.LiveVideoActivity
+import com.rokid.cxrmsamples.activities.psopDemo.PsopDemoActivity
 import com.rokid.cxrmsamples.activities.ttsAndNotification.TTSAndNotificationActivity
 import com.rokid.cxrmsamples.activities.video.VideoActivity
 import com.rokid.cxrmsamples.dataBeans.UsageType
@@ -55,6 +56,9 @@ class UsageSelectionViewModel: ViewModel() {
             }
             UsageType.USAGE_TYPE_LIVE_VIDEO -> {
                 context.startActivity(Intent(context, LiveVideoActivity::class.java))
+            }
+            UsageType.USAGE_TYPE_PSOP_DEMO -> {
+                context.startActivity(Intent(context, PsopDemoActivity::class.java))
             }
         }
     }

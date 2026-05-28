@@ -17,3 +17,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+.qoder/
+servforce-website-web/
+wiki/
