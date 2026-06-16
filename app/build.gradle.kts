@@ -39,6 +39,18 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // 不压缩 onnx 模型文件（避免 assets 中大文件被压缩导致读取失败）
+    androidResources {
+        noCompress += listOf("onnx", "txt")
+    }
+
+    // Sherpa-ONNX jniLibs 目录
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("src/main/jniLibs")
+        }
+    }
 }
 
 dependencies {
@@ -51,6 +63,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material:material-icons-extended")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -66,9 +79,15 @@ dependencies {
     implementation ("com.squareup.okio:okio:2.8.0")
     implementation ("com.google.code.gson:gson:2.10.1")
     implementation ("com.squareup.okhttp3:logging-interceptor:4.9.1")
+    implementation ("io.coil-kt:coil-compose:2.6.0")
+
+    implementation("androidx.media3:media3-exoplayer:1.3.1")
+    implementation("androidx.media3:media3-ui:1.3.1")
 
     implementation("com.rokid.cxr:client-m:1.0.9") {
         exclude(group = "com.rokid.cxr", module = "client-m-sources")
     }
 
+    // Sherpa-ONNX 离线语音识别（AAR 放在 app/libs/ 目录）
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
 }

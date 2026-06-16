@@ -3,8 +3,11 @@ package com.rokid.cxrmsamples.network
 import com.rokid.cxrmsamples.network.api.RetrofitClient
 import com.rokid.cxrmsamples.network.models.AppendTerminalEventRequest
 import com.rokid.cxrmsamples.network.models.CreateInvocationRequest
+import com.rokid.cxrmsamples.network.models.EventSource
+import com.rokid.cxrmsamples.network.models.InvocationListResponse
 import com.rokid.cxrmsamples.network.models.InvocationResponse
 import com.rokid.cxrmsamples.network.models.RunResponse
+import com.rokid.cxrmsamples.network.models.SkillSummaryResponse
 import com.rokid.cxrmsamples.network.models.TerminalEventAppendResponse
 import com.rokid.cxrmsamples.network.models.TerminalEventResponse
 import com.rokid.cxrmsamples.network.models.TerminalSessionResponse
@@ -12,12 +15,10 @@ import com.rokid.cxrmsamples.network.models.TraceEvent
 import com.rokid.cxrmsamples.network.models.WebSocketEvent
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.asRequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody
+import okhttp3.ResponseBody
 import retrofit2.HttpException
-import java.io.File
 import java.util.UUID
 
 class PsopRepository {
@@ -63,16 +64,23 @@ class PsopRepository {
     }
 
     suspend fun appendTerminalEvent(runId: String, text: String): TerminalEventAppendResponse {
+        android.util.Log.e("PSOP_DEBUG", ">>> appendTerminalEvent ENTER, runId=$runId, text='$text'")
         val request = AppendTerminalEventRequest(
+            text = text,
             payloadInline = text,
+            source = EventSource(kind = "android"),
             externalEventId = "android-${UUID.randomUUID()}"
         )
+        android.util.Log.e("PSOP_DEBUG", ">>> request.text=${request.text}, request.payloadInline=${request.payloadInline}")
         try {
-            return api.appendTerminalEvent(runId, UUID.randomUUID().toString(), request)
+            val result = api.appendTerminalEvent(runId, UUID.randomUUID().toString(), request)
+            android.util.Log.e("PSOP_DEBUG", ">>> appendTerminalEvent SUCCESS, eventId=${result.eventId}")
+            return result
         } catch (e: HttpException) {
             val url = e.response()?.raw()?.request?.url?.toString() ?: "unknown"
             val code = e.code()
             val errorBody = e.response()?.errorBody()?.string() ?: ""
+            android.util.Log.e("PSOP_DEBUG", ">>> appendTerminalEvent FAILED: [$code] $url $errorBody")
             throw RuntimeException("[$code] $url\n$errorBody", e)
         }
     }
@@ -95,18 +103,35 @@ class PsopRepository {
 
     suspend fun uploadTerminalFile(
         runId: String,
-        file: File,
-        caption: String? = null
+        idempotencyKey: String,
+        event: RequestBody,
+        file: MultipartBody.Part,
+        caption: RequestBody? = null,
+        externalEventId: RequestBody? = null
     ): TerminalEventAppendResponse {
-        val mediaType = "application/octet-stream".toMediaTypeOrNull()
-        val requestFile = file.asRequestBody(mediaType)
-        val filePart = MultipartBody.Part.createFormData("file", file.name, requestFile)
-        val captionBody = caption?.toRequestBody("text/plain".toMediaTypeOrNull())
         return api.uploadTerminalFile(
             runId = runId,
-            idempotencyKey = UUID.randomUUID().toString(),
-            file = filePart,
-            caption = captionBody
+            idempotencyKey = idempotencyKey,
+            event = event,
+            file = file,
+            caption = caption,
+            externalEventId = externalEventId
         )
+    }
+
+    suspend fun downloadTerminalEventContent(runId: String, eventId: String): ResponseBody {
+        return RetrofitClient.apiService.downloadTerminalEventContent(runId, eventId)
+    }
+
+    suspend fun downloadTerminalEventPartContent(runId: String, eventId: String, partId: String): ResponseBody {
+        return RetrofitClient.apiService.downloadTerminalEventPartContent(runId, eventId, partId)
+    }
+
+    suspend fun listSkills(): List<SkillSummaryResponse> {
+        return api.listSkills(isPublished = "true")
+    }
+
+    suspend fun listInvocations(skillKey: String): List<InvocationListResponse> {
+        return api.listInvocations(skillKey = skillKey)
     }
 }

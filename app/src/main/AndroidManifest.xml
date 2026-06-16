@@ -38,6 +38,11 @@
         </provider>
 
         <activity
+            android:name=".activities.settings.SettingsActivity"
+            android:exported="false"
+            android:label="服务器设置"
+            android:theme="@style/Theme.CXRMSamples" />
+        <activity
             android:name=".activities.psopDemo.PsopDemoActivity"
             android:exported="false"
             android:label="PSOP Demo"

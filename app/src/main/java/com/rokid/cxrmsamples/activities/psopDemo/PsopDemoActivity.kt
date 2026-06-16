@@ -15,6 +15,10 @@ class PsopDemoActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 初始化离线 ASR 引擎（首次会从 assets 解压模型，约 2-3 秒）
+        viewModel.initAsrEngine()
+
         setContent {
             CXRMSamplesTheme {
                 Surface(

@@ -20,3 +20,12 @@ local.properties
 .qoder/
 servforce-website-web/
 wiki/
+
+# Test scripts and results
+test_*.py
+test_*.txt
+ISSUE-*.md
+
+# Large binary assets (download separately)
+app/libs/*.aar
+app/src/main/assets/sherpa-models/*.onnx

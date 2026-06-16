@@ -12,10 +12,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,14 +26,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,7 +74,9 @@ class BluetoothInitActivity : ComponentActivity() {
                     viewModel.record(this)
                 }, disconnect = {
                     viewModel.disconnect()
-                }, toUseGlasses = {
+                }, toPsopDemo = {
+                    viewModel.toPsopDemo(this)
+                }, toSdkDebug = {
                     viewModel.toUseGlasses(this)
                 })
             }
@@ -97,7 +106,8 @@ fun BluetoothInitScreen(
     clear: () -> Unit,
     doAfterConnected: () -> Unit,
     disconnect: () -> Unit,
-    toUseGlasses: () -> Unit
+    toPsopDemo: () -> Unit,
+    toSdkDebug: () -> Unit
 ) {
     val recordState = viewModel.recordState.collectAsState()
     val scanning = viewModel.isScanningState.collectAsState()
@@ -129,84 +139,86 @@ fun BluetoothInitScreen(
                     .fillMaxWidth()
                     .height(32.dp)
             )
-            Text(
-                text = if (recordState.value) {
-                    stringResource(R.string.is_record)
-                } else {
-                    stringResource(R.string.not_record)
-                },
-                modifier = Modifier
-            )
-            if (recordState.value) {
-                Row(
+            if (connected.value) {
+                // 连接成功：只显示设备名，隐藏 mac/uuid
+                Text(
+                    text = "✓ 已连接：${recordName.value ?: "未知设备"}",
+                    fontSize = 16.sp,
+                    color = Color(0xFF4CAF50),
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+            } else {
+                // 未连接：显示完整设备记录信息（用于调试/重连）
+                Text(
+                    text = if (recordState.value) {
+                        stringResource(R.string.is_record)
+                    } else {
+                        stringResource(R.string.not_record)
+                    },
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-
-                ) {
-                    Text(
-                        text = stringResource(R.string.device_record),
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier
-                            .fillMaxWidth(0.3f)
-                            .padding(end = 8.dp)
-                    )
-                    Text(
-                        text = recordName.value ?: "",
-                        fontSize = 12.sp,
+                )
+                if (recordState.value) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                    )
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-
-                ) {
-                    Text(
-                        text = stringResource(R.string.mac_address_record),
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier
-                            .fillMaxWidth(0.3f)
-                            .padding(end = 8.dp)
-                    )
-                    Text(
-                        text = recordMacAddress.value ?: "",
-                        fontSize = 12.sp,
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.device_record),
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier
+                                .fillMaxWidth(0.3f)
+                                .padding(end = 8.dp)
+                        )
+                        Text(
+                            text = recordName.value ?: "",
+                            fontSize = 12.sp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                    )
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-
-                ) {
-                    Text(
-                        text = stringResource(R.string.uuid_record),
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier
-                            .fillMaxWidth(0.3f)
-                            .padding(end = 8.dp)
-                    )
-                    Text(
-                        text = recordUuid.value ?: "",
-                        fontSize = 12.sp,
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.mac_address_record),
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier
+                                .fillMaxWidth(0.3f)
+                                .padding(end = 8.dp)
+                        )
+                        Text(
+                            text = recordMacAddress.value ?: "",
+                            fontSize = 12.sp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                    )
-                }
-                if (!connected.value) {
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.uuid_record),
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier
+                                .fillMaxWidth(0.3f)
+                                .padding(end = 8.dp)
+                        )
+                        Text(
+                            text = recordUuid.value ?: "",
+                            fontSize = 12.sp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     Button(onClick = reconnect, modifier = Modifier.fillMaxWidth(0.8f)) {
                         Text(text = stringResource(R.string.reconnect))
                     }
                 }
-
             }
             if (!connected.value) {
                 Row(modifier = Modifier.fillMaxWidth(0.8f)) {
@@ -258,33 +270,68 @@ fun BluetoothInitScreen(
                 }
             }
 
+            // 连接中 loading 提示
+            if (connecting.value && !connected.value) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(20.dp).padding(end = 12.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Text(text = "正在连接...", fontSize = 14.sp, color = Color(0xFF757575))
+                }
+            }
+
             if (connected.value) {
                 Button(onClick = disconnect, modifier = Modifier.fillMaxWidth(0.7f)) {
                     Text(text = stringResource(R.string.bt_disconnect))
                 }
-                Button(onClick = toUseGlasses, modifier = Modifier.fillMaxWidth(0.7f)) {
-                    Text(text = stringResource(R.string.to_use_glasses))
+                Button(onClick = toPsopDemo, modifier = Modifier.fillMaxWidth(0.7f)) {
+                    Text(text = "开始巡检")
                 }
             }
 
+            // 底部 Spacer 撑满，把 SDK 调试入口推到最底部
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "SDK 调试功能",
+                fontSize = 13.sp,
+                color = Color(0xFF9E9E9E),
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier
+                    .clickable { toSdkDebug() }
+                    .padding(16.dp)
+            )
         }
     }
 }
 
 @Composable
 fun BluetoothDeviceItem(item: DeviceItem, onClick: () -> Unit) {
-    Row(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 4.dp)
             .clickable { onClick() },
-        horizontalArrangement = Arrangement.SpaceBetween
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = item.name, fontSize = 16.sp)
-            Text(text = item.macAddress, fontSize = 12.sp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = item.name, fontSize = 15.sp)
+                Text(text = item.macAddress, fontSize = 11.sp, color = Color(0xFF9E9E9E))
+            }
+            Text(text = "${item.rssi} dBm", fontSize = 12.sp, color = Color(0xFF757575))
         }
-        Text(text = "${item.rssi} dBm", fontSize = 14.sp)
     }
 }
 
@@ -301,7 +348,8 @@ fun GreetingPreview() {
             clear = {},
             doAfterConnected = {},
             disconnect = {},
-            toUseGlasses = {}
+            toPsopDemo = {},
+            toSdkDebug = {}
         )
     }
 }

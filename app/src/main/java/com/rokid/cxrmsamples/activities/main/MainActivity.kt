@@ -32,6 +32,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rokid.cxrmsamples.ui.theme.CXRMSamplesTheme
 
 import com.rokid.cxrmsamples.R
+import com.rokid.cxrmsamples.network.PsopConfig
 import androidx.compose.runtime.collectAsState
 
 class MainActivity : ComponentActivity() {
@@ -55,6 +56,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 加载后端服务器地址配置（未配置则使用默认值）
+        PsopConfig.load(this)
         enableEdgeToEdge()
         setContent {
             CXRMSamplesTheme {
