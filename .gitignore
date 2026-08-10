@@ -29,3 +29,17 @@ ISSUE-*.md
 # Large binary assets (download separately)
 app/libs/*.aar
 app/src/main/assets/sherpa-models/*.onnx
+
+# JVM crash/replay logs
+hs_err_pid*.log
+replay_pid*.log
+
+# Decompiled artifacts
+/com/
+classes.jar
+
+# Review temp files
+review_*.txt
+
+# Standalone probe project (separate repo)
+/glasses-keyevent-probe/
