@@ -1,12 +1,21 @@
 package com.rokid.cxrmsamples.activities.psopDemo
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,20 +38,35 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Videocam
+import com.rokid.cxrmsamples.activities.arRecording.ARRecordingUtils
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -55,6 +79,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -66,12 +91,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -83,8 +110,10 @@ import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.rokid.cxrmsamples.R
 import com.rokid.cxrmsamples.network.ConnectionState
-import com.rokid.cxrmsamples.network.models.InvocationListResponse
+import com.rokid.cxrmsamples.network.models.RunResponse
 import com.rokid.cxrmsamples.network.models.SkillSummaryResponse
+import com.rokid.cxrmsamples.network.models.TaskStatusResponse
+import com.mikepenz.markdown.m3.Markdown
 
 /**
  * 视频缩略图全局缓存（LruCache），key 为视频 URL。
@@ -92,11 +121,46 @@ import com.rokid.cxrmsamples.network.models.SkillSummaryResponse
  */
 private val thumbnailCache = object : android.util.LruCache<String, android.graphics.Bitmap>(20) {}
 
+/** PSOP 页面语义色：统一状态与提示色，避免同义颜色多版本硬编码 */
+private val PsopSuccess = Color(0xFF4CAF50)      // 成功 / 已连接 / 运行中
+private val PsopWarning = Color(0xFFFF9800)      // 警告 / 进行中 / 等待输入
+private val PsopError = Color(0xFFE53935)        // 错误 / 失败 / 断开
+private val PsopInfo = Color(0xFF1976D2)         // 信息 / 主操作蓝
+private val PsopTextSecondary = Color(0xFF666666) // 次级正文
+private val PsopTextHint = Color(0xFF999999)      // 辅助提示
+
+/**
+ * AI 助手徽标：蓝→靛渐变圆形 + 白色 "AI" 字样，
+ * 替代机器人图标，作为消息头像与技能列表标识。
+ */
+@Composable
+private fun AiAvatar(modifier: Modifier = Modifier, textSize: androidx.compose.ui.unit.TextUnit = 13.sp) {
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(Color(0xFF42A5F5), Color(0xFF5C6BC0))
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "AI",
+            color = Color.White,
+            fontSize = textSize,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PsopDemoScreen(viewModel: PsopDemoViewModel) {
     val uiState by viewModel.uiState.collectAsState()
 
+    android.util.Log.d("PSOP_DEBUG", "PsopDemoScreen: currentScreen=${uiState.currentScreen}")
     when (uiState.currentScreen) {
         InspectionScreen.SKILL_LIST -> SkillListScreen(
             skills = uiState.skills,
@@ -107,10 +171,16 @@ fun PsopDemoScreen(viewModel: PsopDemoViewModel) {
         )
         InspectionScreen.INVOCATION_LIST -> InvocationListScreen(
             skillName = uiState.selectedSkill?.name ?: "",
-            invocations = uiState.invocations,
+            runs = uiState.invocations,
             isLoading = uiState.isLoadingInvocations,
+            currentStatusFilter = uiState.runStatusFilter,
+            onStatusFilterChanged = { newStatus ->
+                uiState.selectedSkill?.id?.let { skillId ->
+                    viewModel.loadRuns(skillId, newStatus)
+                }
+            },
             onStartInspection = { viewModel.startSkill() },
-            onInvocationClicked = { viewModel.resumeInvocation(it) },
+            onRunClicked = { viewModel.resumeInvocation(it) },
             onBack = { viewModel.navigateBack() }
         )
         InspectionScreen.INTERACTION -> InteractionScreen(viewModel = viewModel, uiState = uiState)
@@ -128,9 +198,10 @@ fun SkillListScreen(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("选择巡检技能") })
+            TopAppBar(title = { Text("选择技能") })
         }
     ) { padding ->
+        android.util.Log.d("PSOP_DEBUG", "SkillListScreen: isLoading=$isLoading, error=$error, skills.size=${skills.size}")
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -138,6 +209,13 @@ fun SkillListScreen(
         } else if (error != null) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Error,
+                        contentDescription = null,
+                        tint = PsopError,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(error, color = MaterialTheme.colorScheme.error)
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = onRetry) { Text("重试") }
@@ -146,6 +224,13 @@ fun SkillListScreen(
         } else if (skills.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Inbox,
+                        contentDescription = null,
+                        tint = PsopTextHint,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text("暂无可用技能", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = onRetry) { Text("刷新") }
@@ -155,7 +240,12 @@ fun SkillListScreen(
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
                 items(skills) { skill ->
                     ListItem(
-                        headlineContent = { Text(skill.name) },
+                        leadingContent = {
+                            AiAvatar(modifier = Modifier.size(36.dp))
+                        },
+                        headlineContent = {
+                            Text(skill.name, fontWeight = FontWeight.Medium)
+                        },
                         modifier = Modifier.clickable { onSkillSelected(skill) }
                     )
                     HorizontalDivider()
@@ -165,19 +255,29 @@ fun SkillListScreen(
     }
 }
 
+private val RUN_STATUS_OPTIONS = listOf(
+    "running" to "运行中",
+    "succeeded" to "已完成",
+    "aborted" to "已中止",
+    "cancelled" to "已取消"
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InvocationListScreen(
     skillName: String,
-    invocations: List<InvocationListResponse>,
+    runs: List<RunResponse>,
     isLoading: Boolean,
+    currentStatusFilter: String,
+    onStatusFilterChanged: (String) -> Unit,
     onStartInspection: () -> Unit,
-    onInvocationClicked: (InvocationListResponse) -> Unit,
+    onRunClicked: (RunResponse) -> Unit,
     onBack: () -> Unit
 ) {
     BackHandler {
         onBack()
     }
+    var showStatusDropdown by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -186,6 +286,43 @@ fun InvocationListScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    // 状态筛选按钮
+                    Box {
+                        TextButton(onClick = { showStatusDropdown = true }) {
+                            Text(
+                                text = translateStatus(currentStatusFilter),
+                                color = PsopInfo
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "展开筛选",
+                                tint = PsopInfo
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showStatusDropdown,
+                            onDismissRequest = { showStatusDropdown = false }
+                        ) {
+                            RUN_STATUS_OPTIONS.forEach { (value, label) ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            label,
+                                            color = if (value == currentStatusFilter) PsopInfo else Color.Unspecified
+                                        )
+                                    },
+                                    onClick = {
+                                        showStatusDropdown = false
+                                        if (value != currentStatusFilter) {
+                                            onStatusFilterChanged(value)
+                                        }
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             )
@@ -205,19 +342,41 @@ fun InvocationListScreen(
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-        } else if (invocations.isEmpty()) {
+        } else if (runs.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("暂无调用记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Inbox,
+                        contentDescription = null,
+                        tint = PsopTextHint,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("暂无${translateStatus(currentStatusFilter)}的记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "可切换右上角状态筛选",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PsopTextHint
+                    )
+                }
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-                items(invocations) { invocation ->
+                items(runs) { run ->
                     ListItem(
-                        headlineContent = { Text(invocation.runId ?: invocation.id) },
-                        supportingContent = {
-                            Text("状态: ${translateStatus(invocation.status)} | ${formatDateTime(invocation.createdAt)}")
+                        headlineContent = {
+                            Text(run.id.take(12), fontWeight = FontWeight.Medium)
                         },
-                        modifier = Modifier.clickable { onInvocationClicked(invocation) }
+                        supportingContent = {
+                            // 右上角已显示当前筛选状态，列表项只保留时间
+                            Text(
+                                text = formatDateTime(run.createdAt),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        modifier = Modifier.clickable { onRunClicked(run) }
                     )
                     HorizontalDivider()
                 }
@@ -237,12 +396,41 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
     var showTextInput by remember { mutableStateOf(false) }
     var fullScreenImageUrl by remember { mutableStateOf<String?>(null) }
     var fullScreenVideoUrl by remember { mutableStateOf<String?>(null) }
+    var isARRecording by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     // 自动滚动到底部
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.size - 1)
+        }
+    }
+
+    val context = LocalContext.current
+
+    // 相册图片多选器（最多 4 张，合并为一条消息发送）
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 4)
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            val files = uris.mapNotNull { uri ->
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    if (inputStream != null) {
+                        val cacheDir = java.io.File(context.cacheDir, "psop_photos").apply { if (!exists()) mkdirs() }
+                        val file = java.io.File.createTempFile("gallery_", ".jpg", cacheDir)
+                        file.outputStream().use { out -> inputStream.copyTo(out) }
+                        inputStream.close()
+                        file
+                    } else null
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
+                }
+            }
+            if (files.isNotEmpty()) {
+                viewModel.uploadFiles(files)
+            }
         }
     }
 
@@ -256,6 +444,24 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
                     }
                 },
                 actions = {
+                    // AR 录屏开关
+                    IconButton(onClick = {
+                        if (isARRecording) {
+                            ARRecordingUtils.stopRecording()
+                            isARRecording = false
+                        } else {
+                            val result = ARRecordingUtils.startRecording()
+                            if (result == com.rokid.cxr.client.utils.ValueUtil.CxrStatus.REQUEST_SUCCEED) {
+                                isARRecording = true
+                            }
+                        }
+                    }) {
+                        Icon(
+                            Icons.Default.Videocam,
+                            contentDescription = if (isARRecording) "停止AR录屏" else "开始AR录屏",
+                            tint = if (isARRecording) Color(0xFFE53935) else Color(0xFF999999)
+                        )
+                    }
                     // 连接状态指示器
                     ConnectionIndicator(state = uiState.connectionState)
                     Spacer(modifier = Modifier.width(16.dp))
@@ -268,6 +474,34 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // 任务进度面板（可折叠）
+            uiState.taskStatus?.let { taskStatus ->
+                TaskProgressPanel(taskStatus = taskStatus)
+            }
+
+            // 眼镜显示场景切换（默认 CustomView 分段轮播；切换后文字改走提词器场景 WordTips）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (uiState.glassesDisplayMode == GlassesDisplayMode.TELEPROMPTER)
+                        "眼镜显示：提词器" else "眼镜显示：CustomView",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                TextButton(onClick = { viewModel.toggleGlassesDisplayMode() }) {
+                    Text(
+                        text = if (uiState.glassesDisplayMode == GlassesDisplayMode.TELEPROMPTER)
+                            "切到 CustomView" else "切到提词器",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
             // 消息列表
             LazyColumn(
                 state = listState,
@@ -293,8 +527,12 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
                 }
             }
 
-            // 错误提示
+            // 错误提示（5 秒后自动消失）
             if (uiState.error != null) {
+                LaunchedEffect(uiState.error) {
+                    delay(5000)
+                    viewModel.clearError()
+                }
                 Text(
                     text = uiState.error!!,
                     color = MaterialTheme.colorScheme.error,
@@ -314,22 +552,82 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
                         !uiState.isRunning && !uiState.isCompleted -> {
                             Button(
                                 onClick = { viewModel.startSkill() },
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
                             ) {
-                                Text("启动巡检")
+                                Text("启动巡检", fontWeight = FontWeight.Medium)
                             }
                         }
                         uiState.isCompleted -> {
                             Text(
                                 "✅ 巡检完成",
-                                color = Color(0xFF4CAF50),
+                                color = PsopSuccess,
                                 style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
                         else -> {
                             // 语音优先交互模式
                             Column {
+                                // 眼镜端长文本轮播控制区（多段轮播进行中显示，结束后自动隐藏）
+                                if (uiState.carouselTotalCount > 1) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        // 上一段（首段时禁用）
+                                        IconButton(
+                                            onClick = { viewModel.showPrevTextSegment() },
+                                            enabled = uiState.carouselIndex > 0
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ChevronLeft,
+                                                contentDescription = "上一段",
+                                                tint = if (uiState.carouselIndex > 0) MaterialTheme.colorScheme.primary else Color.Gray
+                                            )
+                                        }
+
+                                        // 页码指示（如 2/5）
+                                        Text(
+                                            text = "眼镜显示 ${uiState.carouselIndex + 1}/${uiState.carouselTotalCount}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 8.dp)
+                                        )
+
+                                        // 下一段（末段时禁用）
+                                        IconButton(
+                                            onClick = { viewModel.showNextTextSegment() },
+                                            enabled = uiState.carouselIndex < uiState.carouselTotalCount - 1
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ChevronRight,
+                                                contentDescription = "下一段",
+                                                tint = if (uiState.carouselIndex < uiState.carouselTotalCount - 1) MaterialTheme.colorScheme.primary else Color.Gray
+                                            )
+                                        }
+
+                                        // 暂停/继续轮播
+                                        IconButton(
+                                            onClick = {
+                                                if (uiState.isCarouselPaused) viewModel.resumeTextCarousel()
+                                                else viewModel.pauseTextCarousel()
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = if (uiState.isCarouselPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                                contentDescription = if (uiState.isCarouselPaused) "继续轮播" else "暂停轮播",
+                                                tint = if (uiState.isCarouselPaused) PsopSuccess else PsopWarning
+                                            )
+                                        }
+                                    }
+                                }
+
                                 if (showTextInput) {
                                     // 文本输入模式（备用）
                                     Row(
@@ -382,27 +680,40 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
                                                 }
                                                 InteractionMode.PROCESSING -> "⏳ 执行中..."
                                                 InteractionMode.PHOTO_CAPTURE -> "\uD83D\uDCF7 拍照中..."
+                                                InteractionMode.PHOTO_CONFIRM -> "\uD83D\uDCF7 眼镜端确认中（长按TouchPad确认）"
                                                 InteractionMode.VIDEO_RECORDING -> "\uD83D\uDD34 录像中..."
                                                 InteractionMode.COMPLETED -> "✅ 巡检完成"
                                             },
                                             modifier = Modifier.weight(1f),
-                                            fontSize = 14.sp,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            lineHeight = 20.sp,
                                             color = when (uiState.interactionMode) {
-                                                InteractionMode.LISTENING -> Color(0xFF4CAF50)
-                                                InteractionMode.PROCESSING -> Color(0xFFFF9800)
-                                                InteractionMode.VIDEO_RECORDING -> Color.Red
-                                                else -> Color.Gray
+                                                InteractionMode.LISTENING -> PsopSuccess
+                                                InteractionMode.PROCESSING -> PsopWarning
+                                                InteractionMode.VIDEO_RECORDING -> PsopError
+                                                else -> PsopTextHint
                                             }
                                         )
 
-                                        // 拍照按钮
+                                        // 停止播报按钮（眼镜端 TTS 播报中显示）
+                                        if (uiState.isTtsPlaying) {
+                                            IconButton(onClick = { viewModel.stopTtsPlayback() }) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "停止播报",
+                                                    tint = PsopError
+                                                )
+                                            }
+                                        }
+
+                                        // 相册选图按钮（支持多选）
                                         IconButton(
-                                            onClick = { viewModel.takePictureWithGlass() }
+                                            onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                                         ) {
                                             Icon(
-                                                painter = painterResource(id = R.drawable.ic_photo_camera),
-                                                contentDescription = "拍照",
-                                                tint = Color(0xFF2196F3)
+                                                imageVector = Icons.Default.Image,
+                                                contentDescription = "相册选图",
+                                                tint = PsopSuccess
                                             )
                                         }
 
@@ -411,7 +722,7 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
                                             Icon(
                                                 imageVector = Icons.Default.Edit,
                                                 contentDescription = "文字输入",
-                                                tint = Color.Gray
+                                                tint = PsopTextSecondary
                                             )
                                         }
                                     }
@@ -437,9 +748,9 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
 @Composable
 fun ConnectionIndicator(state: ConnectionState) {
     val color = when (state) {
-        ConnectionState.CONNECTED -> Color(0xFF4CAF50)
-        ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> Color(0xFFFFC107)
-        ConnectionState.DISCONNECTED -> Color(0xFFF44336)
+        ConnectionState.CONNECTED -> PsopSuccess
+        ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> PsopWarning
+        ConnectionState.DISCONNECTED -> PsopError
     }
     val label = when (state) {
         ConnectionState.CONNECTED -> "已连接"
@@ -670,32 +981,19 @@ fun ThinkingIndicator() {
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.Top
     ) {
-        // 机器人头像（与 MessageBubble 保持一致）
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFE8EAF6)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.SmartToy,
-                contentDescription = "AI",
-                tint = Color(0xFF5C6BC0),
-                modifier = Modifier.size(18.dp)
-            )
-        }
+        // AI 徽标（与 MessageBubble 保持一致）
+        AiAvatar(modifier = Modifier.size(32.dp))
         Spacer(modifier = Modifier.width(8.dp))
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFFF0F0F0))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Text(
                 text = "正在思考...",
-                color = Color(0xFF9E9E9E),
-                fontSize = 14.sp
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
             )
         }
     }
@@ -710,82 +1008,107 @@ fun MessageBubble(
     val isOutput = message.direction == "output"
     val textColor = if (isOutput) Color.Black else Color.White
     val richMedia = resolveRichMediaInfo(message.eventKind)
-    // 如果有图片 parts 且 content 是元数据格式，不展示
-    val displayContent = if (message.parts.isNotEmpty() && message.content.startsWith("{")) {
+    // 去掉媒体占位符和 JSON 元数据，只保留实际文字
+    val rawContent = if (message.parts.isNotEmpty() && message.content.startsWith("{")) {
         ""
     } else message.content
+    val displayContent = rawContent.replace("[图片]", "").replace("[音频]", "").replace("[视频]", "").replace("[文件]", "").trim()
+
+    // DEBUG: 查看消息实际内容
+    android.util.Log.d("PSOP_DEBUG", "MessageBubble: contentLen=${message.content.length} content=|${message.content}| displayLen=${displayContent.length} parts=${message.parts.size} eventKind=${message.eventKind}")
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isOutput) Alignment.Start else Alignment.End
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = if (isOutput) Arrangement.Start else Arrangement.End,
-            verticalAlignment = Alignment.Top
-        ) {
-            // AI 消息：左侧显示圆形机器人头像
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            // 气泡最大宽度按可用宽度 78% 计算（扣除头像占位），适配不同屏幕尺寸
+            val bubbleMaxWidth = (maxWidth - 40.dp) * 0.78f
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = if (isOutput) Arrangement.Start else Arrangement.End,
+                verticalAlignment = Alignment.Top
+            ) {
+            // AI 消息：左侧显示渐变圆形徽标
             if (isOutput) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFE8EAF6)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SmartToy,
-                        contentDescription = "AI",
-                        tint = Color(0xFF5C6BC0),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                AiAvatar(modifier = Modifier.size(32.dp))
                 Spacer(modifier = Modifier.width(8.dp))
+            }
+            // 纯图片消息（有 parts 但无文字）：不加蓝色背景和 padding
+            val isPureMedia = displayContent.isEmpty() && message.parts.isNotEmpty()
+            // 对话式不对称圆角：AI 气泡左上角小圆角，用户气泡右上角小圆角
+            val bubbleShape = if (isOutput) {
+                RoundedCornerShape(topStart = 4.dp, topEnd = 12.dp, bottomStart = 12.dp, bottomEnd = 12.dp)
+            } else {
+                RoundedCornerShape(topStart = 12.dp, topEnd = 4.dp, bottomStart = 12.dp, bottomEnd = 12.dp)
             }
             Box(
                 modifier = Modifier
-                    .widthIn(max = 280.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .widthIn(max = bubbleMaxWidth)
+                    .clip(bubbleShape)
                     .then(
-                        if (message.parts.isEmpty()) {
+                        if (isPureMedia) {
+                            Modifier  // 无背景、无 padding
+                        } else {
                             Modifier.background(
-                                if (isOutput) Color(0xFFF0F0F0) else Color(0xFF2196F3)
-                            )
-                        } else Modifier
+                                if (isOutput) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary
+                            ).padding(12.dp)
+                        }
                     )
-                    .padding(12.dp)
             ) {
                 Column {
-                    if (richMedia != null) {
-                        // 富媒体消息：图标 + 类型标签 + 提示
+                    // 上传状态指示器
+                    if (message.uploadStatus == "uploading") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = if (isOutput) Color(0xFF757575) else Color.White
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "发送中...",
+                                color = if (isOutput) PsopTextSecondary else Color(0xBBFFFFFF),
+                                fontSize = 12.sp
+                            )
+                        }
+                    } else if (message.uploadStatus == "failed") {
+                        // 红色感叹号（类似微信发送失败）
+                        Icon(
+                            imageVector = Icons.Default.Error,
+                            contentDescription = "发送失败",
+                            tint = PsopError,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    if (displayContent.isNotEmpty()) {
+                        if (isOutput) {
+                            Markdown(content = displayContent)
+                        } else {
+                            SelectionContainer {
+                                Text(
+                                    text = displayContent,
+                                    color = textColor
+                                )
+                            }
+                        }
+                    } else if (richMedia != null && message.parts.isNotEmpty()) {
+                        // 纯媒体消息（无文字）：显示图标 + 标签
                         val (icon, label) = richMedia
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = icon,
                                 contentDescription = label,
-                                tint = if (isOutput) Color(0xFF757575) else Color.White,
+                                tint = if (isOutput) PsopTextSecondary else Color.White,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Column {
-                                Text(
-                                    text = label,
-                                    color = textColor,
-                                    fontSize = 14.sp
-                                )
-                                Text(
-                                    text = "点击查看",
-                                    color = if (isOutput) Color.Gray else Color(0xBBFFFFFF),
-                                    fontSize = 11.sp
-                                )
-                            }
+                            Text(
+                                text = label,
+                                color = textColor,
+                                fontSize = 14.sp
+                            )
                         }
-                    } else if (displayContent.isNotEmpty()) {
-                        // 纯文本消息
-                        Text(
-                            text = displayContent,
-                            color = textColor
-                        )
                     }
                     // 渲染媒体 parts
                     if (message.parts.isNotEmpty()) {
@@ -817,24 +1140,203 @@ fun MessageBubble(
                     }
                 }
             }
+            }
         }
-        // 时间戳
+        // 时间戳（output 消息需偏移 40dp = 32dp头像 + 8dp间距，与消息框对齐）
         if (message.timestamp.isNotEmpty()) {
             Text(
                 text = formatDateTime(message.timestamp),
-                color = Color.Gray,
-                fontSize = 10.sp,
-                modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp)
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(
+                    top = 2.dp,
+                    start = if (isOutput) 40.dp else 4.dp,
+                    end = 4.dp
+                )
             )
         }
     }
 }
 
+/**
+ * 可折叠的任务进度面板，显示在消息列表上方
+ */
+@Composable
+private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
+    // 默认收起，只显示标题行与进度条，避免占用消息区空间
+    var expanded by remember { mutableStateOf(false) }
+    val task = taskStatus.task
+    val progress = taskStatus.progress
+    val currentStage = taskStatus.stages.find { it.id == taskStatus.currentStageId }
+
+    // 卡片式面板：与消息列表拉开层次，便于现场快速瞟一眼进度
+    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            // 标题行（点击折叠/展开）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 任务名
+                Text(
+                    text = task?.skillName ?: "任务进行中",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                // activity_status 中文标签
+                if (taskStatus.activityStatus.isNotEmpty()) {
+                    val actColor = when (taskStatus.activityStatus.lowercase()) {
+                        "waiting_input" -> PsopWarning
+                        "finalizing" -> PsopWarning
+                        "running" -> PsopSuccess
+                        "succeeded" -> PsopSuccess
+                        "failed" -> PsopError
+                        else -> PsopTextSecondary
+                    }
+                    Text(
+                        text = translateStatus(taskStatus.activityStatus),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = actColor,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                }
+                // 进度文字
+                if (progress != null && progress.total > 0) {
+                    Text(
+                        text = "${progress.completed}/${progress.total}  ${progress.percent}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PsopTextSecondary
+                    )
+                }
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = if (expanded) "收起" else "展开",
+                    modifier = Modifier.size(20.dp),
+                    tint = PsopTextHint
+                )
+            }
+
+            // 进度条（始终显示）
+            if (progress != null && progress.total > 0) {
+                LinearProgressIndicator(
+                    progress = { progress.percent / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = PsopSuccess,
+                    trackColor = Color(0xFFE0E0E0)
+                )
+            }
+
+            // 展开内容
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically()
+            ) {
+                Column(modifier = Modifier.padding(top = 8.dp)) {
+                    // 当前阶段
+                    if (currentStage != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "▸ ${currentStage.title}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = PsopInfo
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            // 阶段状态标签
+                            val statusText = translateStageStatus(currentStage.status)
+                            val statusColor = when (currentStage.status.lowercase()) {
+                                "completed" -> PsopSuccess
+                                "in_progress" -> PsopWarning
+                                "pending" -> PsopTextHint
+                                else -> PsopTextSecondary
+                            }
+                            Text(
+                                text = statusText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = statusColor
+                            )
+                        }
+                        if (currentStage.goal.isNotEmpty()) {
+                            Text(
+                                text = currentStage.goal,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PsopTextSecondary,
+                                lineHeight = 18.sp,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+
+                    // 所有阶段列表
+                    if (taskStatus.stages.size > 1) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        taskStatus.stages.forEach { stage ->
+                            val (icon, iconColor) = when (stage.status.lowercase()) {
+                                "completed" -> Icons.Default.CheckCircle to PsopSuccess
+                                "in_progress" -> Icons.Default.Circle to PsopInfo
+                                "waiting_input" -> Icons.Default.Circle to PsopWarning
+                                else -> Icons.Default.Circle to PsopTextHint
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = iconColor,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = stage.title,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (stage.id == taskStatus.currentStageId) PsopInfo else PsopTextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        }
+    }
+}
+
+private fun translateStageStatus(status: String): String {
+    return when (status.lowercase()) {
+        "pending" -> "待开始"
+        "in_progress" -> "进行中"
+        "waiting_input" -> "运行中"
+        "completed" -> "已完成"
+        "failed" -> "失败"
+        "aborted" -> "已中止"
+        "cancelled" -> "已取消"
+        else -> status
+    }
+}
+
 private fun translateStatus(status: String): String {
     return when (status.lowercase()) {
+        "queued" -> "排队中"
+        "waiting_runtime" -> "准备中"
         "accepted" -> "已接受"
         "running" -> "运行中"
-        "waiting_input" -> "等待输入"
+        "waiting_input" -> "运行中"
+        "finalizing" -> "正在完成核验"
         "succeeded" -> "已完成"
         "failed" -> "失败"
         "cancelled" -> "已取消"

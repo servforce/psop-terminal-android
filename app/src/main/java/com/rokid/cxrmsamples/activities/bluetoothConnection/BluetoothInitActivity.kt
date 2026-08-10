@@ -29,6 +29,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -37,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
@@ -44,7 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rokid.cxrmsamples.R
-import com.rokid.cxrmsamples.ui.theme.CXRMSamplesTheme
+import com.rokid.cxrmsamples.ui.theme.PsopTheme
 
 class BluetoothInitActivity : ComponentActivity() {
 
@@ -54,7 +57,7 @@ class BluetoothInitActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            CXRMSamplesTheme {
+            PsopTheme {
                 BluetoothInitScreen(viewModel = viewModel, reconnect = {
                     viewModel.connectBTSocket(this)
                 }, scan = {
@@ -126,7 +129,7 @@ fun BluetoothInitScreen(
         Image(
             painterResource(R.drawable.glasses_bg),
             modifier = Modifier.fillMaxSize(),
-            alpha = 0.3f,
+            alpha = 0.12f,
             contentDescription = null
         )
         Column(
@@ -144,6 +147,7 @@ fun BluetoothInitScreen(
                 Text(
                     text = "✓ 已连接：${recordName.value ?: "未知设备"}",
                     fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
                     color = Color(0xFF4CAF50),
                     modifier = Modifier.padding(vertical = 16.dp)
                 )
@@ -215,18 +219,22 @@ fun BluetoothInitScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    Button(onClick = reconnect, modifier = Modifier.fillMaxWidth(0.8f)) {
+                    Button(onClick = reconnect, modifier = Modifier.fillMaxWidth(0.9f)) {
                         Text(text = stringResource(R.string.reconnect))
                     }
                 }
             }
             if (!connected.value) {
-                Row(modifier = Modifier.fillMaxWidth(0.8f)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .padding(top = 12.dp)
+                ) {
                     Button(
-                        onClick = scan, modifier = Modifier
+                        onClick = scan,
+                        modifier = Modifier
                             .weight(1f)
                             .padding(start = 4.dp, end = 4.dp)
-                            .offset(y = 12.dp)
                     ) {
                         Text(
                             text = if (!scanning.value) {
@@ -238,10 +246,9 @@ fun BluetoothInitScreen(
                     }
                     if (!scanning.value && devices.value.isNotEmpty()) {
 //                if (!scanning.value){
-                        Button(
+                        OutlinedButton(
                             onClick = clear,
                             modifier = Modifier
-                                .offset(y = 12.dp)
                                 .padding(start = 4.dp, end = 4.dp)
                         ) {
                             Text(text = stringResource(R.string.clear_items))
@@ -281,16 +288,22 @@ fun BluetoothInitScreen(
                         modifier = Modifier.height(20.dp).padding(end = 12.dp),
                         strokeWidth = 2.dp
                     )
-                    Text(text = "正在连接...", fontSize = 14.sp, color = Color(0xFF757575))
+                    Text(text = "正在连接...", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
             if (connected.value) {
-                Button(onClick = disconnect, modifier = Modifier.fillMaxWidth(0.7f)) {
-                    Text(text = stringResource(R.string.bt_disconnect))
+                Button(
+                    onClick = toPsopDemo,
+                    modifier = Modifier
+                        .fillMaxWidth(0.8f)
+                        .height(52.dp)
+                ) {
+                    Text(text = "开始巡检", fontWeight = FontWeight.Medium)
                 }
-                Button(onClick = toPsopDemo, modifier = Modifier.fillMaxWidth(0.7f)) {
-                    Text(text = "开始巡检")
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(onClick = disconnect, modifier = Modifier.fillMaxWidth(0.8f)) {
+                    Text(text = stringResource(R.string.bt_disconnect))
                 }
             }
 
@@ -316,8 +329,8 @@ fun BluetoothDeviceItem(item: DeviceItem, onClick: () -> Unit) {
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .clickable { onClick() },
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Row(
             modifier = Modifier
@@ -327,10 +340,10 @@ fun BluetoothDeviceItem(item: DeviceItem, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = item.name, fontSize = 15.sp)
-                Text(text = item.macAddress, fontSize = 11.sp, color = Color(0xFF9E9E9E))
+                Text(text = item.name, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Text(text = item.macAddress, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(text = "${item.rssi} dBm", fontSize = 12.sp, color = Color(0xFF757575))
+            Text(text = "${item.rssi} dBm", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -338,7 +351,7 @@ fun BluetoothDeviceItem(item: DeviceItem, onClick: () -> Unit) {
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview() {
-    CXRMSamplesTheme {
+    PsopTheme {
         BluetoothInitScreen(
             reconnect = {},
             viewModel = viewModel { BluetoothIniViewModel() },

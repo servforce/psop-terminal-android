@@ -33,14 +33,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.rokid.cxrmsamples.network.PsopConfig
 import com.rokid.cxrmsamples.network.api.RetrofitClient
-import com.rokid.cxrmsamples.ui.theme.CXRMSamplesTheme
+import com.rokid.cxrmsamples.ui.theme.PsopTheme
 
 class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            CXRMSamplesTheme {
+            PsopTheme {
                 SettingsScreen(onBack = { finish() })
             }
         }

@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
@@ -32,6 +33,39 @@ private val LightColorScheme = lightColorScheme(
     onSurface = Color(0xFF1C1B1F),
     */
 )
+
+/**
+ * PSOP 巡检页专用配色：固定浅色系，不跟随系统深色模式与壁纸动态取色，
+ * 保证装机现场不同手机上的视觉一致性。
+ */
+private val PsopLightColorScheme = lightColorScheme(
+    primary = Color(0xFF1976D2),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFBBDEFB),
+    onPrimaryContainer = Color(0xFF0D47A1),
+    secondary = Color(0xFF546E7A),
+    tertiary = Color(0xFFFF9800),
+    error = Color(0xFFE53935),
+    background = Color(0xFFFAFAFA),
+    onBackground = Color(0xFF212121),
+    surface = Color.White,
+    onSurface = Color(0xFF212121),
+    surfaceVariant = Color(0xFFF1F3F5),
+    onSurfaceVariant = Color(0xFF666666),
+    outline = Color(0xFFE0E0E0)
+)
+
+/**
+ * PSOP 巡检页专用主题：始终浅色，避免深色模式下硬编码文字颜色不可读。
+ */
+@Composable
+fun PsopTheme(content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = PsopLightColorScheme,
+        typography = Typography,
+        content = content
+    )
+}
 
 @Composable
 fun CXRMSamplesTheme(

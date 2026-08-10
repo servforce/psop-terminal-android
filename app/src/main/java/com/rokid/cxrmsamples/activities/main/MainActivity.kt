@@ -15,8 +15,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,7 +32,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.rokid.cxrmsamples.ui.theme.CXRMSamplesTheme
+import com.rokid.cxrmsamples.ui.theme.PsopTheme
 
 import com.rokid.cxrmsamples.R
 import com.rokid.cxrmsamples.network.PsopConfig
@@ -60,7 +63,7 @@ class MainActivity : ComponentActivity() {
         PsopConfig.load(this)
         enableEdgeToEdge()
         setContent {
-            CXRMSamplesTheme {
+            PsopTheme {
                 MainScreen(viewModel, onButtonClick = {
                     when (viewModel.bluetoothState.value){
                         BluetoothState.PERMISSION_REQUIRED -> {
@@ -89,7 +92,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel(), onButtonClick:()->Unit) {
         Image(// background
             painter = painterResource(id = R.drawable.glasses_bg),
             contentDescription = null,
-            alpha = 0.3f,
+            alpha = 0.12f,
             modifier = Modifier.fillMaxSize()
         )
         Column(
@@ -103,18 +106,25 @@ fun MainScreen(viewModel: MainViewModel = viewModel(), onButtonClick:()->Unit) {
                     BluetoothState.BLUETOOTH_DISABLED -> stringResource(R.string.bluetooth_closed)
                     BluetoothState.BLUETOOTH_READY -> stringResource(R.string.ready)
                 },
-                textAlign = TextAlign.Start,
-                fontSize = 16.sp,
-                modifier = Modifier.padding(bottom = 16.dp)
+                textAlign = TextAlign.Center,
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 12.dp)
             )
             Text(// welcome
                 text = stringResource(R.string.hello_rokid),
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 32.dp)
             )
-            Button(onClick = onButtonClick) {// button
+            Button(
+                onClick = onButtonClick,
+                modifier = Modifier
+                    .fillMaxWidth(0.6f)
+                    .height(52.dp)
+            ) {// button
                 Text(text = when(state.value){
                     BluetoothState.PERMISSION_REQUIRED -> stringResource(R.string.button_request_permission)
                     BluetoothState.BLUETOOTH_DISABLED -> stringResource(R.string.button_open_bluetooth)
@@ -129,7 +139,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel(), onButtonClick:()->Unit) {
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview() {
-    CXRMSamplesTheme {
+    PsopTheme {
         MainScreen(viewModel { MainViewModel() }, onButtonClick = {})
     }
 }
