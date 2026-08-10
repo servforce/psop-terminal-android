@@ -18,6 +18,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
+        android:name=".CXRMSamplesApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -38,6 +39,11 @@
         </provider>
 
         <activity
+            android:name=".activities.arRecording.ARRecordingActivity"
+            android:exported="false"
+            android:label="AR录屏"
+            android:theme="@style/Theme.CXRMSamples" />
+        <activity
             android:name=".activities.settings.SettingsActivity"
             android:exported="false"
             android:label="服务器设置"
@@ -46,6 +52,11 @@
             android:name=".activities.psopDemo.PsopDemoActivity"
             android:exported="false"
             android:label="PSOP Demo"
+            android:theme="@style/Theme.CXRMSamples" />
+        <activity
+            android:name=".activities.p2pStabilityTest.P2pStabilityTestActivity"
+            android:exported="false"
+            android:label="P2P拍照回传测试"
             android:theme="@style/Theme.CXRMSamples" />
         <activity
             android:name=".activities.ttsAndNotification.TTSAndNotificationActivity"

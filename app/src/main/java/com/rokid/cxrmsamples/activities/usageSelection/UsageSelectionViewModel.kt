@@ -3,11 +3,13 @@ package com.rokid.cxrmsamples.activities.usageSelection
 import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
+import com.rokid.cxrmsamples.activities.arRecording.ARRecordingActivity
 import com.rokid.cxrmsamples.activities.audio.AudioUsageActivity
 import com.rokid.cxrmsamples.activities.customProtocol.CustomProtocolActivity
 import com.rokid.cxrmsamples.activities.customView.CustomViewActivity
 import com.rokid.cxrmsamples.activities.deviceInformation.DeviceInformationActivity
 import com.rokid.cxrmsamples.activities.mediaFile.MediaFileActivity
+import com.rokid.cxrmsamples.activities.p2pStabilityTest.P2pStabilityTestActivity
 import com.rokid.cxrmsamples.activities.picture.PictureActivity
 import com.rokid.cxrmsamples.activities.useAIScene.AISceneActivity
 import com.rokid.cxrmsamples.activities.useTeleprompter.TeleprompterSceneActivity
@@ -57,8 +59,14 @@ class UsageSelectionViewModel: ViewModel() {
             UsageType.USAGE_TYPE_LIVE_VIDEO -> {
                 context.startActivity(Intent(context, LiveVideoActivity::class.java))
             }
+            UsageType.USAGE_TYPE_AR_RECORDING -> {
+                context.startActivity(Intent(context, ARRecordingActivity::class.java))
+            }
             UsageType.USAGE_TYPE_PSOP_DEMO -> {
                 context.startActivity(Intent(context, PsopDemoActivity::class.java))
+            }
+            UsageType.USAGE_TYPE_P2P_STABILITY_TEST -> {
+                context.startActivity(Intent(context, P2pStabilityTestActivity::class.java))
             }
         }
     }

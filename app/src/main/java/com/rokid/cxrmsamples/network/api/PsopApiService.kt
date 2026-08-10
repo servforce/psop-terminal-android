@@ -2,10 +2,10 @@ package com.rokid.cxrmsamples.network.api
 
 import com.rokid.cxrmsamples.network.models.AppendTerminalEventRequest
 import com.rokid.cxrmsamples.network.models.CreateInvocationRequest
-import com.rokid.cxrmsamples.network.models.InvocationListResponse
 import com.rokid.cxrmsamples.network.models.InvocationResponse
 import com.rokid.cxrmsamples.network.models.RunResponse
 import com.rokid.cxrmsamples.network.models.SkillSummaryResponse
+import com.rokid.cxrmsamples.network.models.TaskStatusResponse
 import com.rokid.cxrmsamples.network.models.TerminalEventAppendResponse
 import com.rokid.cxrmsamples.network.models.TerminalEventResponse
 import com.rokid.cxrmsamples.network.models.TerminalSessionResponse
@@ -30,12 +30,21 @@ interface PsopApiService {
     @GET("runs/{runId}")
     suspend fun getRun(@Path("runId") runId: String): RunResponse
 
+    @GET("runs/{runId}/task-status")
+    suspend fun getTaskStatus(@Path("runId") runId: String): TaskStatusResponse
+
     @GET("terminal/sessions/{runId}/events")
     suspend fun getTerminalEvents(
         @Path("runId") runId: String,
         @Query("from_seq") fromSeq: Int? = null,
         @Query("to_seq") toSeq: Int? = null
     ): List<TerminalEventResponse>
+
+    @GET("terminal/sessions/{runId}/events/{eventId}")
+    suspend fun getTerminalEvent(
+        @Path("runId") runId: String,
+        @Path("eventId") eventId: String
+    ): TerminalEventResponse
 
     @POST("terminal/sessions/{runId}/events")
     suspend fun appendTerminalEvent(
@@ -50,9 +59,7 @@ interface PsopApiService {
         @Path("runId") runId: String,
         @Header("Idempotency-Key") idempotencyKey: String,
         @Part("event") event: RequestBody,
-        @Part file: MultipartBody.Part,
-        @Part("caption") caption: RequestBody? = null,
-        @Part("external_event_id") externalEventId: RequestBody? = null
+        @Part files: List<MultipartBody.Part>
     ): TerminalEventAppendResponse
 
     @GET("terminal/sessions/{runId}")
@@ -66,14 +73,6 @@ interface PsopApiService {
         @Query("event_type") eventType: String? = null
     ): List<TraceEvent>
 
-    @GET("terminal/sessions/{runId}/events/{eventId}/content")
-    @Streaming
-    suspend fun downloadTerminalEventContent(
-        @Path("runId") runId: String,
-        @Path("eventId") eventId: String,
-        @Header("Range") range: String? = null
-    ): ResponseBody
-
     @GET("terminal/sessions/{runId}/events/{eventId}/parts/{partId}/content")
     @Streaming
     suspend fun downloadTerminalEventPartContent(
@@ -86,6 +85,9 @@ interface PsopApiService {
     @GET("skills")
     suspend fun listSkills(@Query("is_published") isPublished: String? = null): List<SkillSummaryResponse>
 
-    @GET("gateway/invocations")
-    suspend fun listInvocations(@Query("skill_key") skillKey: String? = null): List<InvocationListResponse>
+    @GET("runs")
+    suspend fun listRuns(
+        @Query("skill_id") skillId: String? = null,
+        @Query("status") status: List<String>? = null
+    ): List<RunResponse>
 }

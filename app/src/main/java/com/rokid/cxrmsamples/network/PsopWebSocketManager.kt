@@ -81,6 +81,8 @@ class PsopWebSocketManager(
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
+                    // DEBUG: 打印所有 WebSocket 消息
+                    android.util.Log.d("PSOP_DEBUG", "WS RAW [${text.length}chars]: ${text.take(500)}")
                     val event = gson.fromJson(text, WebSocketEvent::class.java)
                     lastReceivedSeq = maxOf(lastReceivedSeq, event.seqNo)
                     scope.launch { _events.emit(event) }

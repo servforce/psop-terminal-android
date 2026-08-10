@@ -17,5 +17,8 @@ data class RunResponse(
     @SerializedName("latest_trace_seq") val latestTraceSeq: Int? = null,
     @SerializedName("terminal_session_id") val terminalSessionId: String? = null,
     @SerializedName("final_output") val finalOutput: Any? = null,
-    @SerializedName("exit_reason") val exitReason: String? = null
+    @SerializedName("exit_reason") val exitReason: String? = null,
+    @SerializedName("checkpoint_id") val checkpointId: String? = null,
+    @SerializedName("resume_phase") val resumePhase: String? = null,
+    @SerializedName("latest_evaluation") val latestEvaluation: Any? = null
 )

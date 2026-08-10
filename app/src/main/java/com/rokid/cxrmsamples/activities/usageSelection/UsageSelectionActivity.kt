@@ -95,6 +95,12 @@ fun UsageSelectionScreen(onClick: (UsageType) -> Unit) {
             }
 
             Button(modifier = Modifier.fillMaxWidth(), onClick = {
+                onClick(UsageType.USAGE_TYPE_AR_RECORDING)
+            }) {
+                Text(text = stringResource(R.string.usage_ar_recording))
+            }
+
+            Button(modifier = Modifier.fillMaxWidth(), onClick = {
                 onClick(UsageType.USAGE_TYPE_FILE)
             }) {
                 Text(text = stringResource(R.string.usage_meidia_files))
@@ -140,6 +146,12 @@ fun UsageSelectionScreen(onClick: (UsageType) -> Unit) {
                 onClick(UsageType.USAGE_TYPE_PSOP_DEMO)
             }) {
                 Text(text = stringResource(R.string.usage_psop_demo))
+            }
+
+            Button(modifier = Modifier.fillMaxWidth(), onClick = {
+                onClick(UsageType.USAGE_TYPE_P2P_STABILITY_TEST)
+            }) {
+                Text(text = "P2P拍照回传稳定性测试")
             }
 
             Spacer(modifier = Modifier.height(16.dp))

@@ -148,6 +148,16 @@ class TextViewProps {
                 throw IllegalArgumentException("marginBottom must be a valid size")
             }
         }
+    var maxHeight: String? = null
+        set(value) {
+            field = if (value == null || value.matches(Regex("[0-9]+dp"))) {
+                value
+            } else if (value.matches(Regex("[0-9]+"))) {
+                value + "dp"
+            } else {
+                throw IllegalArgumentException("maxHeight must be a valid size")
+            }
+        }
 
     fun toJson(): String {
         return if (id.isEmpty()) {
@@ -182,6 +192,8 @@ class TextViewProps {
                 sb.append(",\"marginTop\":\"$marginTop\"")
             if (marginBottom != null)
                 sb.append(",\"marginBottom\":\"$marginBottom\"")
+            if (maxHeight != null)
+                sb.append(",\"maxHeight\":\"$maxHeight\"")
             sb.append("}").toString()
         }
     }

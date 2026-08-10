@@ -86,6 +86,11 @@ class MediaFileViewModel: ViewModel() {
      */
     override fun onCleared() {
         CxrApi.getInstance().setMediaFilesUpdateListener(null)
+        // 页面退出兜底清理：disconnect 仅由手动按钮触发，若发现中退出页面，
+        // 发现轮询 Runnable 会自续排每 1.5s 永久运行。此处无 context，
+        // 走 disconnect 的降级分支同款组合：停发现（含取消轮询）+ 解绑监听器
+        P2PUtils.Instance.stopDiscoverP2P()
+        P2PUtils.Instance.setListener(null)
         super.onCleared()
     }
 

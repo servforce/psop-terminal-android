@@ -7,11 +7,7 @@ data class CreateInvocationRequest(
     @SerializedName("version_selector") val versionSelector: String = "latest",
     @SerializedName("gateway_type") val gatewayType: String = "terminal",
     @SerializedName("terminal_context") val terminalContext: Map<String, Any> = mapOf(
-        "terminal_kind" to "android",
-        "supported_inputs" to listOf(
-            "terminal.text.input.v1",
-            "terminal.image.input.v1"
-        ),
+        "terminal_kind" to "external_terminal",
         "device_id" to "",
         "operator" to ""
     ),
