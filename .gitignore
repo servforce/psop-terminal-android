@@ -43,3 +43,6 @@ review_*.txt
 
 # Standalone probe project (separate repo)
 /glasses-keyevent-probe/
+
+# Local visual brainstorming sessions
+/.superpowers/
