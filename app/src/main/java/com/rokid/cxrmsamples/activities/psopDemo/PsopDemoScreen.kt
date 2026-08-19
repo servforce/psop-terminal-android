@@ -177,12 +177,10 @@ fun PsopDemoScreen(viewModel: PsopDemoViewModel) {
             onRetry = { viewModel.loadSkills() },
             onBack = { viewModel.navigateBack() }
         )
-        InspectionScreen.INVOCATION_LIST -> InvocationListScreen(
-            skillName = uiState.selectedSkill?.name ?: "",
-            runs = uiState.invocations,
-            isLoading = uiState.isLoadingInvocations,
-            currentStatusFilter = uiState.runStatusFilter,
-            onStatusFilterChanged = { newStatus ->
+        InspectionScreen.INVOCATION_LIST -> PsopSkillRunsScreen(
+            skillName = uiState.selectedSkill?.name ?: "巡检技能",
+            uiState = uiState,
+            onStatusChanged = { newStatus ->
                 uiState.selectedSkill?.id?.let { skillId ->
                     viewModel.loadRuns(skillId, newStatus)
                 }

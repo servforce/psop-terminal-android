@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
@@ -238,6 +239,77 @@ fun PsopHistoryScreen(
             } else {
                 LazyColumn(contentPadding = PaddingValues(top = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(uiState.invocations, key = { it.id }) { run -> HistoryRunCard(run, uiState, onRunClicked) }
+                }
+            }
+        }
+    }
+}
+
+/** 单个技能的运行记录。结构和“历史记录”一致，避免从技能页跳回旧版样式。 */
+@Composable
+fun PsopSkillRunsScreen(
+    skillName: String,
+    uiState: PsopDemoUiState,
+    onStatusChanged: (String) -> Unit,
+    onStartInspection: () -> Unit,
+    onRunClicked: (RunResponse) -> Unit,
+    onBack: () -> Unit
+) {
+    BackHandler(onBack = onBack)
+    val statuses = listOf("running" to "运行中", "succeeded" to "已完成", "aborted" to "已中止", "cancelled" to "已取消")
+    Scaffold(
+        containerColor = PsopPage,
+        bottomBar = {
+            Surface(color = Color.White) {
+                Button(
+                    onClick = onStartInspection,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 18.dp).height(60.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PsopBlue)
+                ) {
+                    Text("开始巡检", fontSize = 20.sp)
+                }
+            }
+        }
+    ) { padding ->
+        Column(Modifier.padding(padding).padding(horizontal = 32.dp, vertical = 24.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                }
+                Text(skillName, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 8.dp))
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                statuses.forEach { (value, label) ->
+                    val selected = value == uiState.runStatusFilter
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (selected) PsopBlue else Color.White,
+                        modifier = Modifier.weight(1f).clickable { onStatusChanged(value) }
+                    ) {
+                        Text(
+                            label,
+                            color = if (selected) Color.White else Color(0xFF485467),
+                            modifier = Modifier.padding(vertical = 14.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
+            when {
+                uiState.isLoadingInvocations -> Text("正在加载…", color = PsopSecondary, modifier = Modifier.padding(top = 36.dp))
+                uiState.invocations.isEmpty() -> {
+                    val label = statuses.first { it.first == uiState.runStatusFilter }.second
+                    Text("暂无${label}记录", color = PsopSecondary, modifier = Modifier.padding(top = 36.dp))
+                }
+                else -> LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(top = 28.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(uiState.invocations, key = { it.id }) { run ->
+                        HistoryRunCard(run, uiState, onRunClicked)
+                    }
                 }
             }
         }
