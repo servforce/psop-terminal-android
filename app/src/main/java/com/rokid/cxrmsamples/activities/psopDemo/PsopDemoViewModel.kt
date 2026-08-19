@@ -128,6 +128,8 @@ data class PsopDemoUiState(
     /** 仅在 CXR SDK 成功返回时展示，避免用占位电量误导现场人员。 */
     val glassBatteryLevel: Int? = null,
     val isGlassCharging: Boolean? = null,
+    /** 首页只根据 SDK 当前连接状态显示“已连接”，不把已保存设备误当作已连接。 */
+    val isGlassesConnected: Boolean = false,
     val isLoadingSkills: Boolean = false,
     val isLoadingInvocations: Boolean = false,
     val runStatusFilter: String = "running",
@@ -589,9 +591,22 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
-        refreshGlassBattery()
+        refreshGlassConnection()
         loadSkills()
         loadHomeRuns()
+    }
+
+    /** 从连接页返回首页时刷新，避免断开后首页仍显示“已连接”。 */
+    fun refreshGlassConnection() {
+        val connected = CxrApi.getInstance().isBluetoothConnected
+        _uiState.update {
+            it.copy(
+                isGlassesConnected = connected,
+                glassBatteryLevel = if (connected) it.glassBatteryLevel else null,
+                isGlassCharging = if (connected) it.isGlassCharging else null
+            )
+        }
+        if (connected) refreshGlassBattery()
     }
 
     private fun refreshGlassBattery() {

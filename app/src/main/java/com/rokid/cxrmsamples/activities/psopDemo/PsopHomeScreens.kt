@@ -59,6 +59,8 @@ fun PsopHomeScreen(
     uiState: PsopDemoUiState,
     onOpenSkills: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenDeviceConnection: () -> Unit,
+    onOpenSdkDebug: () -> Unit,
     onResumeRun: (RunResponse) -> Unit
 ) {
     val activeRun = uiState.homeRuns.firstOrNull()
@@ -81,7 +83,7 @@ fun PsopHomeScreen(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("PSOP 智能巡检", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                    IconButton(onClick = {}) { Icon(Icons.Default.Settings, contentDescription = "设置", tint = PsopSecondary) }
+                    IconButton(onClick = onOpenSdkDebug) { Icon(Icons.Default.Settings, contentDescription = "SDK 调试", tint = PsopSecondary) }
                 }
             }
             item {
@@ -89,7 +91,7 @@ fun PsopHomeScreen(
                 Text("准备开始今天的巡检", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 4.dp))
             }
             item {
-                DeviceSummaryCard(uiState)
+                DeviceSummaryCard(uiState, onOpenDeviceConnection)
             }
             item {
                 Button(
@@ -127,7 +129,7 @@ fun PsopHomeScreen(
 }
 
 @Composable
-private fun DeviceSummaryCard(uiState: PsopDemoUiState) {
+private fun DeviceSummaryCard(uiState: PsopDemoUiState, onClick: () -> Unit) {
     val context = LocalContext.current
     val savedDevice = remember(context) {
         context.getSharedPreferences("record", android.content.Context.MODE_PRIVATE)
@@ -137,14 +139,28 @@ private fun DeviceSummaryCard(uiState: PsopDemoUiState) {
         context.getSharedPreferences("record", android.content.Context.MODE_PRIVATE)
             .getString("record_mac_address", null).orEmpty()
     }
-    Surface(shape = RoundedCornerShape(28.dp), color = Color.White, tonalElevation = 0.dp, modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        shape = RoundedCornerShape(28.dp),
+        color = Color.White,
+        tonalElevation = 0.dp,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+    ) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Surface(shape = RoundedCornerShape(20.dp), color = PsopSoftGreen) {
-                    Text("●  已连接", color = Color(0xFF10B981), modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontWeight = FontWeight.Medium)
+                val isConnected = uiState.isGlassesConnected
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isConnected) PsopSoftGreen else PsopSoftOrange
+                ) {
+                    Text(
+                        if (isConnected) "●  已连接" else "未连接",
+                        color = if (isConnected) Color(0xFF10B981) else Color(0xFFB76A00),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        fontWeight = FontWeight.Medium
+                    )
                 }
                 Spacer(Modifier.weight(1f))
-                uiState.glassBatteryLevel?.let { level ->
+                uiState.glassBatteryLevel?.takeIf { isConnected }?.let { level ->
                     Text(
                         text = "电量 $level%",
                         color = PsopSecondary,

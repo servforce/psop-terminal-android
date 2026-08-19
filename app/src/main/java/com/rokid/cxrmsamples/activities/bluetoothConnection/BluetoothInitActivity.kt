@@ -73,7 +73,7 @@ class BluetoothInitActivity : ComponentActivity() {
                     ).show()
                 }, clear = {
                     viewModel.clearDevices()
-                }, onCancelConnection = {
+                }, onDisconnect = {
                     viewModel.disconnect()
                 }, onConnected = {
                     viewModel.record(this)

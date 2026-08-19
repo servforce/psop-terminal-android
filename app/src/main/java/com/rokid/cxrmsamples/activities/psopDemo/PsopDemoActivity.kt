@@ -1,5 +1,6 @@
 package com.rokid.cxrmsamples.activities.psopDemo
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,6 +11,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.rokid.cxrmsamples.ui.theme.PsopTheme
+import com.rokid.cxrmsamples.activities.bluetoothConnection.BluetoothInitActivity
+import com.rokid.cxrmsamples.activities.usageSelection.UsageSelectionActivity
 
 class PsopDemoActivity : ComponentActivity() {
     private val viewModel: PsopDemoViewModel by viewModels()
@@ -32,9 +35,22 @@ class PsopDemoActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    PsopDemoScreen(viewModel = viewModel)
+                    PsopDemoScreen(
+                        viewModel = viewModel,
+                        onOpenDeviceConnection = {
+                            startActivity(Intent(this@PsopDemoActivity, BluetoothInitActivity::class.java))
+                        },
+                        onOpenSdkDebug = {
+                            startActivity(Intent(this@PsopDemoActivity, UsageSelectionActivity::class.java))
+                        }
+                    )
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshGlassConnection()
     }
 }

@@ -354,6 +354,8 @@ class BluetoothIniViewModel : ViewModel() {
      */
     fun disconnect() {
         CxrApi.getInstance().deinitBluetooth()
+        _connecting.value = false
+        _connected.value = false
     }
     /**
      * 直接跳转 PSOP 巡检（主流程）

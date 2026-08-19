@@ -170,7 +170,11 @@ private fun AssistantMessageMark(modifier: Modifier = Modifier) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PsopDemoScreen(viewModel: PsopDemoViewModel) {
+fun PsopDemoScreen(
+    viewModel: PsopDemoViewModel,
+    onOpenDeviceConnection: () -> Unit,
+    onOpenSdkDebug: () -> Unit
+) {
     val uiState by viewModel.uiState.collectAsState()
 
     android.util.Log.d("PSOP_DEBUG", "PsopDemoScreen: currentScreen=${uiState.currentScreen}")
@@ -179,6 +183,8 @@ fun PsopDemoScreen(viewModel: PsopDemoViewModel) {
             uiState = uiState,
             onOpenSkills = { viewModel.openSkillList() },
             onOpenHistory = { viewModel.openHistory() },
+            onOpenDeviceConnection = onOpenDeviceConnection,
+            onOpenSdkDebug = onOpenSdkDebug,
             onResumeRun = { viewModel.resumeInvocation(it) }
         )
         InspectionScreen.SKILL_LIST -> SkillListScreen(

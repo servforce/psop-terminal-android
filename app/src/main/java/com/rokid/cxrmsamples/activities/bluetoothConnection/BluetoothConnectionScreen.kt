@@ -46,7 +46,7 @@ fun BluetoothConnectionScreen(
     onItemClicked: (DeviceItem) -> Unit,
     onToast: () -> Unit,
     clear: () -> Unit,
-    onCancelConnection: () -> Unit,
+    onDisconnect: () -> Unit,
     onConnected: () -> Unit,
     onStartInspection: () -> Unit,
     onBack: () -> Unit
@@ -83,6 +83,14 @@ fun BluetoothConnectionScreen(
             Spacer(Modifier.weight(1f))
             Button(onClick = onStartInspection, modifier = Modifier.fillMaxWidth().height(64.dp), shape = RoundedCornerShape(22.dp)) {
                 Text("开始巡检", fontSize = 20.sp)
+            }
+            Spacer(Modifier.height(18.dp))
+            OutlinedButton(
+                onClick = onDisconnect,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Text("断开连接", fontSize = 18.sp)
             }
             Spacer(Modifier.height(18.dp))
             return@Column
@@ -130,7 +138,7 @@ fun BluetoothConnectionScreen(
             }
         }
         if (connecting.value) {
-            OutlinedButton(onClick = onCancelConnection, modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp).height(60.dp), shape = RoundedCornerShape(20.dp)) {
+            OutlinedButton(onClick = onDisconnect, modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp).height(60.dp), shape = RoundedCornerShape(20.dp)) {
                 Text("取消连接", fontSize = 18.sp)
             }
         } else {
