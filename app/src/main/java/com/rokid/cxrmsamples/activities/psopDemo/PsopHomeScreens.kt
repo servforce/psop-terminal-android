@@ -340,10 +340,12 @@ private fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunClic
                 Text(skillName(run, uiState), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 StatusChip(historyStatusLabel(run.status), run.status)
             }
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                Text("任务编号 ${shortId(run.id)}", color = PsopSecondary, modifier = Modifier.weight(1f))
-                Text(formatRunDate(run.createdAt), color = PsopSecondary)
-            }
+            Text(
+                formatRunDate(run.createdAt),
+                color = PsopSecondary,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.End
+            )
             if (run.status == "running" || run.status == "waiting_input") {
                 Text("继续", color = PsopBlue, fontWeight = FontWeight.Medium, modifier = Modifier.align(Alignment.End).padding(top = 12.dp))
             }
@@ -366,8 +368,6 @@ private fun StatusChip(label: String, status: String) {
 
 private fun skillName(run: RunResponse, state: PsopDemoUiState): String =
     state.skills.find { it.id == run.skillDefinitionId }?.name ?: run.currentStep ?: "巡检任务"
-
-private fun shortId(id: String): String = if (id.length <= 12) id else "${id.take(8)}…${id.takeLast(4)}"
 
 private fun formatRunDate(value: String): String = value.replace("T", " ").substringBefore(".").takeLast(11)
 
