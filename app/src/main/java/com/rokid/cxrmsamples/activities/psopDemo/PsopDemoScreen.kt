@@ -87,6 +87,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1197,6 +1198,7 @@ fun MessageBubble(
 private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
     val task = taskStatus.task
     val progress = taskStatus.progress
+    var isExpanded by rememberSaveable { mutableStateOf(true) }
     Surface(
         color = Color.White,
         shape = RoundedCornerShape(24.dp),
@@ -1217,34 +1219,49 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
                         fontWeight = FontWeight.Medium
                     )
                 }
-            }
-            if (progress != null && progress.total > 0) {
-                LinearProgressIndicator(
-                    progress = { progress.percent / 100f },
-                    modifier = Modifier.fillMaxWidth().padding(top = 22.dp).height(12.dp),
-                    color = Color(0xFF2E66E9),
-                    trackColor = Color(0xFFE9EDF2)
-                )
-                Row(Modifier.fillMaxWidth().padding(top = 22.dp)) {
-                    Text("${progress.completed} / ${progress.total} 完成", color = PsopTextSecondary, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    Text("${progress.percent}%", color = Color(0xFF2E66E9), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                IconButton(onClick = { isExpanded = !isExpanded }) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (isExpanded) "收起步骤记录" else "展开步骤记录",
+                        tint = PsopTextSecondary
+                    )
                 }
             }
-            taskStatus.stages.take(3).forEach { stage ->
-                val isCurrent = stage.id == taskStatus.currentStageId
-                val dotColor = if (isCurrent) Color(0xFF2E66E9) else Color(0xFFA0AABB)
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Circle, null, tint = dotColor, modifier = Modifier.size(16.dp))
-                    Text(
-                        stage.title,
-                        color = if (isCurrent) Color(0xFF2E66E9) else PsopTextSecondary,
-                        modifier = Modifier.weight(1f).padding(start = 14.dp),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    if (isCurrent) Text("当前", color = Color(0xFF2E66E9), style = MaterialTheme.typography.titleMedium)
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(animationSpec = tween(180)) + fadeIn(animationSpec = tween(180)),
+                exit = shrinkVertically(animationSpec = tween(180))
+            ) {
+                Column {
+                    if (progress != null && progress.total > 0) {
+                        LinearProgressIndicator(
+                            progress = { progress.percent / 100f },
+                            modifier = Modifier.fillMaxWidth().padding(top = 22.dp).height(12.dp),
+                            color = Color(0xFF2E66E9),
+                            trackColor = Color(0xFFE9EDF2)
+                        )
+                        Row(Modifier.fillMaxWidth().padding(top = 22.dp)) {
+                            Text("${progress.completed} / ${progress.total} 完成", color = PsopTextSecondary, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                            Text("${progress.percent}%", color = Color(0xFF2E66E9), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    taskStatus.stages.take(3).forEach { stage ->
+                        val isCurrent = stage.id == taskStatus.currentStageId
+                        val dotColor = if (isCurrent) Color(0xFF2E66E9) else Color(0xFFA0AABB)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Circle, null, tint = dotColor, modifier = Modifier.size(16.dp))
+                            Text(
+                                stage.title,
+                                color = if (isCurrent) Color(0xFF2E66E9) else PsopTextSecondary,
+                                modifier = Modifier.weight(1f).padding(start = 14.dp),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            if (isCurrent) Text("当前", color = Color(0xFF2E66E9), style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
                 }
             }
         }
