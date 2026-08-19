@@ -58,7 +58,7 @@ class BluetoothInitActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             PsopTheme {
-                BluetoothInitScreen(viewModel = viewModel, reconnect = {
+                BluetoothConnectionScreen(viewModel = viewModel, reconnect = {
                     viewModel.connectBTSocket(this)
                 }, scan = {
                     viewModel.handleScan(btManager.adapter.bluetoothLeScanner)
@@ -73,14 +73,14 @@ class BluetoothInitActivity : ComponentActivity() {
                     ).show()
                 }, clear = {
                     viewModel.clearDevices()
-                }, doAfterConnected = {
-                    viewModel.record(this)
-                }, disconnect = {
+                }, onCancelConnection = {
                     viewModel.disconnect()
-                }, toPsopDemo = {
+                }, onConnected = {
+                    viewModel.record(this)
+                }, onStartInspection = {
                     viewModel.toPsopDemo(this)
-                }, toSdkDebug = {
-                    viewModel.toUseGlasses(this)
+                }, onBack = {
+                    finish()
                 })
             }
         }

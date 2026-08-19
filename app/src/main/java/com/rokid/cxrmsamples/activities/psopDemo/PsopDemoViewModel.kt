@@ -13,11 +13,13 @@ import com.rokid.cxr.client.extend.callbacks.SendStatusCallback
 import com.rokid.cxr.client.extend.callbacks.SyncStatusCallback
 import com.rokid.cxr.client.extend.callbacks.UnsyncNumResultCallback
 import com.rokid.cxr.client.extend.callbacks.WifiP2PStatusCallback
+import com.rokid.cxr.client.extend.callbacks.GlassInfoResultCallback
 import com.rokid.cxr.client.extend.infos.IconInfo
 import com.rokid.cxr.client.extend.listeners.AiEventListener
 import com.rokid.cxr.client.extend.listeners.AudioStreamListener
 import com.rokid.cxr.client.extend.listeners.MediaFilesUpdateListener
 import com.rokid.cxr.client.extend.listeners.MediaStreamListener
+import com.rokid.cxr.client.extend.listeners.BatteryLevelUpdateListener
 import com.rokid.cxr.client.utils.ValueUtil
 import com.rokid.cxrmsamples.activities.liveVideo.LiveVideoMp4Recorder
 import com.rokid.cxrmsamples.activities.mediaFile.P2PListener
@@ -98,10 +100,14 @@ enum class GlassesDisplayMode {
 }
 
 enum class InspectionScreen {
+    HOME,
     SKILL_LIST,
     INVOCATION_LIST,
+    HISTORY,
     INTERACTION
 }
+
+enum class RunListScope { SKILL, ALL }
 
 data class PsopDemoUiState(
     val isRunning: Boolean = false,
@@ -113,13 +119,19 @@ data class PsopDemoUiState(
     val runStatus: String? = null, // "running", "waiting_input", "succeeded", "failed", "cancelled", "aborted"
     val interactionMode: InteractionMode = InteractionMode.IDLE,
     val asrText: String = "",  // 当前 ASR 识别到的文字（实时显示用）
-    val currentScreen: InspectionScreen = InspectionScreen.SKILL_LIST,
+    val currentScreen: InspectionScreen = InspectionScreen.HOME,
     val skills: List<SkillSummaryResponse> = emptyList(),
     val selectedSkill: SkillSummaryResponse? = null,
     val invocations: List<RunResponse> = emptyList(),
+    val homeRuns: List<RunResponse> = emptyList(),
+    val isLoadingHomeRuns: Boolean = false,
+    /** 仅在 CXR SDK 成功返回时展示，避免用占位电量误导现场人员。 */
+    val glassBatteryLevel: Int? = null,
+    val isGlassCharging: Boolean? = null,
     val isLoadingSkills: Boolean = false,
     val isLoadingInvocations: Boolean = false,
     val runStatusFilter: String = "running",
+    val runListScope: RunListScope = RunListScope.SKILL,
     val taskStatus: TaskStatusResponse? = null,  // 任务进度状态
     val isTtsPlaying: Boolean = false,  // 眼镜端 TTS 是否正在播报（用于显示"停止播报"按钮）
     // ===== 眼镜端长文本轮播控制状态（供手机端翻页/暂停按钮显隐与页码显示） =====
@@ -577,7 +589,32 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
+        refreshGlassBattery()
         loadSkills()
+        loadHomeRuns()
+    }
+
+    private fun refreshGlassBattery() {
+        CxrApi.getInstance().getGlassInfo(GlassInfoResultCallback { status, info ->
+            if (status == ValueUtil.CxrStatus.RESPONSE_SUCCEED && info != null) {
+                _uiState.update {
+                    it.copy(
+                        glassBatteryLevel = info.batteryLevel.takeIf { level -> level in 0..100 },
+                        isGlassCharging = info.isCharging
+                    )
+                }
+            }
+        })
+        CxrApi.getInstance().setBatteryLevelUpdateListener(
+            BatteryLevelUpdateListener { level, isCharging ->
+                _uiState.update {
+                    it.copy(
+                        glassBatteryLevel = level.takeIf { battery -> battery in 0..100 },
+                        isGlassCharging = isCharging
+                    )
+                }
+            }
+        )
     }
 
     /**
@@ -629,8 +666,54 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun selectSkill(skill: SkillSummaryResponse) {
-        _uiState.update { it.copy(selectedSkill = skill, currentScreen = InspectionScreen.INVOCATION_LIST) }
+        _uiState.update {
+            it.copy(
+                selectedSkill = skill,
+                currentScreen = InspectionScreen.INVOCATION_LIST,
+                runListScope = RunListScope.SKILL
+            )
+        }
         loadRuns(skill.id)
+    }
+
+    fun openHome() {
+        _uiState.update { it.copy(currentScreen = InspectionScreen.HOME, error = null) }
+        loadHomeRuns()
+    }
+
+    fun openSkillList() {
+        _uiState.update { it.copy(currentScreen = InspectionScreen.SKILL_LIST, error = null) }
+        if (_uiState.value.skills.isEmpty()) loadSkills()
+    }
+
+    fun openHistory(status: String = "running") {
+        _uiState.update {
+            it.copy(
+                currentScreen = InspectionScreen.HISTORY,
+                runStatusFilter = status,
+                runListScope = RunListScope.ALL,
+                error = null
+            )
+        }
+        loadAllRuns(status)
+    }
+
+    private fun statusListFor(status: String?): List<String>? = when (status) {
+        "running" -> listOf("running", "waiting_input")
+        else -> status?.let { listOf(it) }
+    }
+
+    private fun loadHomeRuns() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingHomeRuns = true) }
+            try {
+                val runs = repository.listRuns(status = statusListFor("running"))
+                _uiState.update { it.copy(homeRuns = runs, isLoadingHomeRuns = false) }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load home runs", e)
+                _uiState.update { it.copy(isLoadingHomeRuns = false) }
+            }
+        }
     }
 
     fun loadRuns(skillId: String, status: String? = _uiState.value.runStatusFilter) {
@@ -639,16 +722,26 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
             try {
                 // 将筛选值转换为 API 所需的状态数组
                 // "运行中" 对应 running + waiting_input
-                val statusList = when (status) {
-                    "running" -> listOf("running", "waiting_input")
-                    else -> status?.let { listOf(it) }
-                }
+                val statusList = statusListFor(status)
                 val runs = repository.listRuns(skillId, statusList)
                 Log.d(TAG, "Runs loaded: ${runs.size} items, status=$statusList")
                 _uiState.update { it.copy(invocations = runs, isLoadingInvocations = false) }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load runs", e)
                 _uiState.update { it.copy(isLoadingInvocations = false, error = "加载记录失败: ${e.message}") }
+            }
+        }
+    }
+
+    fun loadAllRuns(status: String = _uiState.value.runStatusFilter) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingInvocations = true, runStatusFilter = status) }
+            try {
+                val runs = repository.listRuns(status = statusListFor(status))
+                _uiState.update { it.copy(invocations = runs, isLoadingInvocations = false) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load all runs", e)
+                _uiState.update { it.copy(isLoadingInvocations = false, error = "加载历史记录失败: ${e.message}") }
             }
         }
     }
@@ -660,11 +753,14 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     fun navigateBack() {
         val current = _uiState.value.currentScreen
         when (current) {
+            InspectionScreen.SKILL_LIST, InspectionScreen.HISTORY -> openHome()
             InspectionScreen.INVOCATION_LIST -> _uiState.update { it.copy(currentScreen = InspectionScreen.SKILL_LIST) }
             InspectionScreen.INTERACTION -> {
-                _uiState.update { it.copy(currentScreen = InspectionScreen.INVOCATION_LIST) }
-                // 返回时刷新 Runs 列表
-                _uiState.value.selectedSkill?.id?.let { loadRuns(it) }
+                val returnToHistory = _uiState.value.runListScope == RunListScope.ALL
+                _uiState.update {
+                    it.copy(currentScreen = if (returnToHistory) InspectionScreen.HISTORY else InspectionScreen.INVOCATION_LIST)
+                }
+                if (returnToHistory) loadAllRuns() else _uiState.value.selectedSkill?.id?.let { loadRuns(it) }
                 // 清理本次会话中的本地图片缓存
                 cleanupPhotoCache()
                 // 拆除 P2P 预连接
@@ -1511,6 +1607,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
      */
     fun resumeInvocation(invocation: RunResponse) {
         val runId = invocation.id
+        val matchingSkill = _uiState.value.skills.firstOrNull { it.id == invocation.skillDefinitionId }
         // 重新注册 AI 事件监听器（上次巡检结束时会被置 null）
         CxrApi.getInstance().setAiEventListener(aiEventListener)
         // 重新注册媒体文件更新监听器
@@ -1520,6 +1617,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         _uiState.update {
             it.copy(
                 currentScreen = InspectionScreen.INTERACTION,
+                selectedSkill = matchingSkill ?: it.selectedSkill,
                 runId = runId,
                 isRunning = true,
                 error = null,
@@ -4330,7 +4428,6 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     override fun onCleared() {
-        super.onCleared()
         // 停止录像（如果正在录制）
         if (_uiState.value.interactionMode == InteractionMode.VIDEO_RECORDING) {
             videoRecordingJob?.cancel()
@@ -4344,6 +4441,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
             mp4Recorder = null
         }
         CxrApi.getInstance().setMediaFilesUpdateListener(null)
+        CxrApi.getInstance().setBatteryLevelUpdateListener(null)
         CxrApi.getInstance().setGlassStatusUpdateListener(null)
         CxrApi.getInstance().setSceneStatusUpdateListener(null)
         stopAsrListening()
@@ -4382,5 +4480,6 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         hwPhotoQueuedCount = 0
         hwPhotoAutoRoundCount = 0
         repository.disconnectWebSocket()
+        super.onCleared()
     }
 }

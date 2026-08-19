@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Videocam
 import com.rokid.cxrmsamples.activities.arRecording.ARRecordingUtils
@@ -162,12 +163,19 @@ fun PsopDemoScreen(viewModel: PsopDemoViewModel) {
 
     android.util.Log.d("PSOP_DEBUG", "PsopDemoScreen: currentScreen=${uiState.currentScreen}")
     when (uiState.currentScreen) {
+        InspectionScreen.HOME -> PsopHomeScreen(
+            uiState = uiState,
+            onOpenSkills = { viewModel.openSkillList() },
+            onOpenHistory = { viewModel.openHistory() },
+            onResumeRun = { viewModel.resumeInvocation(it) }
+        )
         InspectionScreen.SKILL_LIST -> SkillListScreen(
             skills = uiState.skills,
             isLoading = uiState.isLoadingSkills,
             error = uiState.error,
             onSkillSelected = { viewModel.selectSkill(it) },
-            onRetry = { viewModel.loadSkills() }
+            onRetry = { viewModel.loadSkills() },
+            onBack = { viewModel.navigateBack() }
         )
         InspectionScreen.INVOCATION_LIST -> InvocationListScreen(
             skillName = uiState.selectedSkill?.name ?: "",
@@ -183,6 +191,12 @@ fun PsopDemoScreen(viewModel: PsopDemoViewModel) {
             onRunClicked = { viewModel.resumeInvocation(it) },
             onBack = { viewModel.navigateBack() }
         )
+        InspectionScreen.HISTORY -> PsopHistoryScreen(
+            uiState = uiState,
+            onStatusChanged = { viewModel.loadAllRuns(it) },
+            onRunClicked = { viewModel.resumeInvocation(it) },
+            onBack = { viewModel.navigateBack() }
+        )
         InspectionScreen.INTERACTION -> InteractionScreen(viewModel = viewModel, uiState = uiState)
     }
 }
@@ -194,11 +208,26 @@ fun SkillListScreen(
     isLoading: Boolean,
     error: String?,
     onSkillSelected: (SkillSummaryResponse) -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onBack: () -> Unit
 ) {
+    BackHandler(onBack = onBack)
+    var searchQuery by remember { mutableStateOf("") }
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("选择技能") })
+            TopAppBar(
+                title = { Text("选择巡检技能") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onRetry) {
+                        Icon(Icons.Default.Refresh, contentDescription = "刷新")
+                    }
+                }
+            )
         }
     ) { padding ->
         android.util.Log.d("PSOP_DEBUG", "SkillListScreen: isLoading=$isLoading, error=$error, skills.size=${skills.size}")
@@ -237,18 +266,58 @@ fun SkillListScreen(
                 }
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-                items(skills) { skill ->
-                    ListItem(
-                        leadingContent = {
-                            AiAvatar(modifier = Modifier.size(36.dp))
-                        },
-                        headlineContent = {
-                            Text(skill.name, fontWeight = FontWeight.Medium)
-                        },
-                        modifier = Modifier.clickable { onSkillSelected(skill) }
-                    )
-                    HorizontalDivider()
+            val filteredSkills = skills.filter { it.name.contains(searchQuery, ignoreCase = true) }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    placeholder = { Text("搜索巡检技能") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(18.dp)
+                )
+                if (filteredSkills.isEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Default.Inbox, null, tint = PsopTextHint, modifier = Modifier.size(48.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Text("未找到“$searchQuery”相关技能", style = MaterialTheme.typography.titleMedium)
+                        Text("换个关键词试试", color = PsopTextHint, modifier = Modifier.padding(top = 6.dp))
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = 18.dp, bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filteredSkills, key = { it.id }) { skill ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(20.dp),
+                                modifier = Modifier.fillMaxWidth().clickable { onSkillSelected(skill) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFF0F5FF), modifier = Modifier.size(56.dp)) {
+                                        AiAvatar(modifier = Modifier.padding(10.dp), textSize = 12.sp)
+                                    }
+                                    Spacer(Modifier.width(16.dp))
+                                    Text(skill.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                                    Icon(Icons.Default.ChevronRight, contentDescription = "选择", tint = PsopTextHint)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -396,7 +465,6 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
     var showTextInput by remember { mutableStateOf(false) }
     var fullScreenImageUrl by remember { mutableStateOf<String?>(null) }
     var fullScreenVideoUrl by remember { mutableStateOf<String?>(null) }
-    var isARRecording by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     // 自动滚动到底部
@@ -437,35 +505,20 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(uiState.selectedSkill?.name ?: "PSOP 设备巡检") },
+                title = {
+                    Column {
+                        Text(uiState.selectedSkill?.name ?: "PSOP 设备巡检")
+                        if (uiState.isRunning) {
+                            Text("运行中 · 已连接", color = PsopSuccess, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.navigateBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
-                actions = {
-                    // AR 录屏开关
-                    IconButton(onClick = {
-                        if (isARRecording) {
-                            ARRecordingUtils.stopRecording()
-                            isARRecording = false
-                        } else {
-                            val result = ARRecordingUtils.startRecording()
-                            if (result == com.rokid.cxr.client.utils.ValueUtil.CxrStatus.REQUEST_SUCCEED) {
-                                isARRecording = true
-                            }
-                        }
-                    }) {
-                        Icon(
-                            Icons.Default.Videocam,
-                            contentDescription = if (isARRecording) "停止AR录屏" else "开始AR录屏",
-                            tint = if (isARRecording) Color(0xFFE53935) else Color(0xFF999999)
-                        )
-                    }
-                    // 连接状态指示器
-                    ConnectionIndicator(state = uiState.connectionState)
-                    Spacer(modifier = Modifier.width(16.dp))
-                }
+                actions = {}
             )
         }
     ) { padding ->
@@ -477,29 +530,6 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
             // 任务进度面板（可折叠）
             uiState.taskStatus?.let { taskStatus ->
                 TaskProgressPanel(taskStatus = taskStatus)
-            }
-
-            // 眼镜显示场景切换（默认 CustomView 分段轮播；切换后文字改走提词器场景 WordTips）
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (uiState.glassesDisplayMode == GlassesDisplayMode.TELEPROMPTER)
-                        "眼镜显示：提词器" else "眼镜显示：CustomView",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                TextButton(onClick = { viewModel.toggleGlassesDisplayMode() }) {
-                    Text(
-                        text = if (uiState.glassesDisplayMode == GlassesDisplayMode.TELEPROMPTER)
-                            "切到 CustomView" else "切到提词器",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
             }
 
             // 消息列表
@@ -1164,8 +1194,8 @@ fun MessageBubble(
  */
 @Composable
 private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
-    // 默认收起，只显示标题行与进度条，避免占用消息区空间
-    var expanded by remember { mutableStateOf(false) }
+    // 巡检时默认展示当前阶段，便于在现场快速确认。
+    var expanded by remember { mutableStateOf(true) }
     val task = taskStatus.task
     val progress = taskStatus.progress
     val currentStage = taskStatus.stages.find { it.id == taskStatus.currentStageId }
@@ -1173,8 +1203,8 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
     // 卡片式面板：与消息列表拉开层次，便于现场快速瞟一眼进度
     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
         Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -1231,9 +1261,9 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 6.dp)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = PsopSuccess,
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp)),
+                    color = PsopInfo,
                     trackColor = Color(0xFFE0E0E0)
                 )
             }

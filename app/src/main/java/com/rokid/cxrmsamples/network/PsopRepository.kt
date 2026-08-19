@@ -135,7 +135,7 @@ class PsopRepository {
         return api.listSkills(isPublished = "true")
     }
 
-    suspend fun listRuns(skillId: String, status: List<String>? = null): List<RunResponse> {
+    suspend fun listRuns(skillId: String? = null, status: List<String>? = null): List<RunResponse> {
         return api.listRuns(skillId = skillId, status = status)
     }
 }
