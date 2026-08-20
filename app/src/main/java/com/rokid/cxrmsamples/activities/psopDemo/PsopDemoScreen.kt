@@ -1259,34 +1259,13 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
                             )
                         }
                     }
-                    taskStatus.stages.take(3).forEach { stage ->
-                        val stagePresentation = when {
-                            stage.status == "completed" -> StagePresentation(
-                                color = Color(0xFF10B981),
-                                label = "已完成"
-                            )
-                            stage.id == taskStatus.currentStageId ||
-                                stage.status in setOf("in_progress", "waiting_input") -> StagePresentation(
-                                color = Color(0xFF2E66E9),
-                                label = "进行中"
-                            )
-                            else -> StagePresentation(
-                                color = Color(0xFFA0AABB),
-                                label = "未完成"
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Circle, null, tint = stagePresentation.color, modifier = Modifier.size(16.dp))
-                            Text(
-                                stage.title,
-                                color = stagePresentation.color,
-                                modifier = Modifier.weight(1f).padding(start = 14.dp),
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(stagePresentation.label, color = stagePresentation.color, style = MaterialTheme.typography.titleMedium)
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp).padding(top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        items(taskStatus.stages, key = { it.id }) { stage ->
+                            StageRow(stage = stage, currentStageId = taskStatus.currentStageId)
                         }
                     }
                 }
@@ -1296,6 +1275,37 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
 }
 
 private data class StagePresentation(val color: Color, val label: String)
+
+@Composable
+private fun StageRow(stage: com.rokid.cxrmsamples.network.models.TaskStage, currentStageId: String?) {
+    val stagePresentation = when {
+        stage.status == "completed" -> StagePresentation(
+            color = Color(0xFF10B981),
+            label = "已完成"
+        )
+        stage.id == currentStageId || stage.status in setOf("in_progress", "waiting_input") -> StagePresentation(
+            color = Color(0xFF2E66E9),
+            label = "进行中"
+        )
+        else -> StagePresentation(
+            color = Color(0xFFA0AABB),
+            label = "未完成"
+        )
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Circle, null, tint = stagePresentation.color, modifier = Modifier.size(16.dp))
+        Text(
+            stage.title,
+            color = stagePresentation.color,
+            modifier = Modifier.weight(1f).padding(start = 14.dp),
+            style = MaterialTheme.typography.titleMedium
+        )
+        Text(stagePresentation.label, color = stagePresentation.color, style = MaterialTheme.typography.titleMedium)
+    }
+}
 
 private fun translateStageStatus(status: String): String {
     return when (status.lowercase()) {
