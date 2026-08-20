@@ -369,7 +369,16 @@ private fun StatusChip(label: String, status: String) {
 private fun skillName(run: RunResponse, state: PsopDemoUiState): String =
     state.skills.find { it.id == run.skillDefinitionId }?.name ?: run.currentStep ?: "巡检任务"
 
-private fun formatRunDate(value: String): String = value.replace("T", " ").substringBefore(".").takeLast(11)
+private fun formatRunDate(value: String): String {
+    val normalized = value.replace("T", " ").substringBefore(".")
+    val date = normalized.substringBefore(" ")
+    val time = normalized.substringAfter(" ", "")
+    return if (date.length >= 10 && time.length >= 5) {
+        "${date.substring(5).replace("-", "/")} ${time.take(5)}"
+    } else {
+        normalized
+    }
+}
 
 private fun historyStatusLabel(status: String): String = when (status) {
     "running", "waiting_input" -> "运行中"
