@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rokid.cxrmsamples.network.models.RunResponse
+import java.util.Calendar
 
 private val PsopBlue = Color(0xFF2E66E9)
 private val PsopSoftBlue = Color(0xFFEAF0FF)
@@ -64,6 +65,8 @@ fun PsopHomeScreen(
 ) {
     val activeRun = uiState.homeResumeRun
     val recentRun = uiState.homeRecentRun
+    val greeting = homeGreeting()
+    val actionHint = homeActionHint(activeRun, recentRun)
     Scaffold(
         containerColor = PsopPage,
         bottomBar = {
@@ -87,8 +90,8 @@ fun PsopHomeScreen(
                 }
             }
             item {
-                Text("上午好", color = PsopSecondary, style = MaterialTheme.typography.titleMedium)
-                Text("准备开始今天的巡检", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 4.dp))
+                Text(greeting, color = PsopSecondary, style = MaterialTheme.typography.titleMedium)
+                Text(actionHint, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 4.dp))
             }
             item {
                 DeviceSummaryCard(uiState, onOpenDeviceConnection)
@@ -126,6 +129,18 @@ fun PsopHomeScreen(
             }
         }
     }
+}
+
+private fun homeGreeting(hourOfDay: Int = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)): String = when (hourOfDay) {
+    in 5..11 -> "上午好"
+    in 12..17 -> "下午好"
+    else -> "晚上好"
+}
+
+private fun homeActionHint(activeRun: RunResponse?, recentRun: RunResponse?): String = when {
+    activeRun != null -> "你有一项巡检正在进行，继续完成它吧"
+    recentRun != null -> "上次巡检已完成，开始新的巡检吧"
+    else -> "准备开始今天的巡检吧"
 }
 
 @Composable
