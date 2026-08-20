@@ -523,19 +523,23 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(uiState.selectedSkill?.name ?: "PSOP 设备巡检")
-                        if (uiState.isRunning) {
-                            Text("运行中 · 已连接", color = PsopSuccess, style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
+                    Text(uiState.selectedSkill?.name ?: "PSOP 设备巡检")
                 },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.navigateBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
-                actions = {}
+                actions = {
+                    if (uiState.isRunning) {
+                        Text(
+                            text = "运行中 · ${if (uiState.isGlassesConnected) "已连接" else "未连接"}",
+                            color = if (uiState.isGlassesConnected) PsopSuccess else PsopTextSecondary,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(end = 16.dp)
+                        )
+                    }
+                }
             )
         }
     ) { padding ->
@@ -1198,6 +1202,8 @@ fun MessageBubble(
 private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
     val task = taskStatus.task
     val progress = taskStatus.progress
+    val currentStage = taskStatus.stages.find { it.id == taskStatus.currentStageId }
+    val prompt = currentStage?.goal?.takeIf { it.isNotBlank() } ?: task?.skillName ?: "任务进行中"
     var isExpanded by rememberSaveable { mutableStateOf(true) }
     Surface(
         color = Color.White,
@@ -1207,18 +1213,10 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
         Column(modifier = Modifier.padding(28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = task?.skillName ?: "任务进行中",
+                    text = prompt,
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.weight(1f)
                 )
-                Surface(shape = RoundedCornerShape(18.dp), color = Color(0xFFE4F7F0)) {
-                    Text(
-                        text = translateStatus(taskStatus.activityStatus.ifBlank { "running" }),
-                        color = Color(0xFF10B981),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        fontWeight = FontWeight.Medium
-                    )
-                }
                 IconButton(onClick = { isExpanded = !isExpanded }) {
                     Icon(
                         imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,

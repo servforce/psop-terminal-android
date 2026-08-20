@@ -60,6 +60,9 @@ class BluetoothIniViewModel : ViewModel() {
     private val _connected: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
+    private val _connectionError: MutableStateFlow<String?> = MutableStateFlow(null)
+    val connectionError: StateFlow<String?> = _connectionError.asStateFlow()
+
     val toConnect = MutableLiveData<Boolean>()
 
     // Bluetooth connection state callback
@@ -112,6 +115,7 @@ class BluetoothIniViewModel : ViewModel() {
             _devicesList.value = emptyList()
             _connected.value = true
             _connecting.value = false
+            _connectionError.value = null
         }
 
         /**
@@ -137,6 +141,7 @@ class BluetoothIniViewModel : ViewModel() {
             Log.e(TAG, "Bluetooth connection failed with error: $p0")
             _connecting.value = false
             _connected.value = false
+            _connectionError.value = "连接失败，请重试"
         }
 
     }
@@ -295,16 +300,25 @@ class BluetoothIniViewModel : ViewModel() {
      * Connect to Glasses's socket, the last step of the connection process
      */
     fun connectBTSocket(context: Context) {
+        val uuid = _recordUUID.value
+        val macAddress = _recordMacAddress.value
+        if (uuid.isNullOrBlank() || macAddress.isNullOrBlank()) {
+            Log.w(TAG, "Cannot reconnect because saved device information is incomplete")
+            _connectionError.value = "未找到已保存的设备信息"
+            return
+        }
         Log.d(
             TAG,
-            "Reconnecting to device: uuid=${_recordUUID.value}, mac=${_recordMacAddress.value}"
+            "Reconnecting to device: uuid=$uuid, mac=$macAddress"
         )
+        _connecting.value = true
+        _connectionError.value = null
         // 文档 01设备连接：connectBluetooth(uuid, macAddress, callback, SN文件, clientSecret)
         try {
             CxrApi.getInstance().connectBluetooth(
                 context,
-                _recordUUID.value ?: "error", // uuid from record or BluetoothStatusCallback::onConnectionInfo
-                _recordMacAddress.value ?: "error", // mac from record or BluetoothStatusCallback::onConnectionInfo
+                uuid, // uuid from record or BluetoothStatusCallback::onConnectionInfo
+                macAddress, // mac from record or BluetoothStatusCallback::onConnectionInfo
                 connectionState, // callback for connection state
                 readRawFile(context), // SN authentication file
                 CONSTANT.CLIENT_SECRET.replace("-", "") // client secret
@@ -312,6 +326,8 @@ class BluetoothIniViewModel : ViewModel() {
         }catch (e: Exception){
             Log.d(TAG, "Error: ${e.message}")
             e.printStackTrace()
+            _connecting.value = false
+            _connectionError.value = "连接失败，请重试"
         }
 
     }
@@ -328,6 +344,7 @@ class BluetoothIniViewModel : ViewModel() {
             // 文档 01设备连接：initBluetooth 获取 uuid/macAddress 后需再调用 connectBluetooth
             CxrApi.getInstance().initBluetooth(context, it.device, connectionState)
             _connecting.value = true
+            _connectionError.value = null
         }
     }
 
@@ -356,6 +373,7 @@ class BluetoothIniViewModel : ViewModel() {
         CxrApi.getInstance().deinitBluetooth()
         _connecting.value = false
         _connected.value = false
+        _connectionError.value = null
     }
     /**
      * 直接跳转 PSOP 巡检（主流程）

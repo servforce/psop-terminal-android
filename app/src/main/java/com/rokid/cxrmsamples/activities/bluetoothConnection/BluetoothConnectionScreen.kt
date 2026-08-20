@@ -58,6 +58,7 @@ fun BluetoothConnectionScreen(
     val recordMacAddress = viewModel.recordMacAddress.collectAsState()
     val connecting = viewModel.connecting.collectAsState()
     val connected = viewModel.connected.collectAsState()
+    val connectionError = viewModel.connectionError.collectAsState()
 
     LaunchedEffect(connected.value) {
         if (connected.value) onConnected()
@@ -124,6 +125,14 @@ fun BluetoothConnectionScreen(
                 }
             }
         } else {
+            connectionError.value?.let { error ->
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
             Text(
                 if (scanning.value) "●  正在扫描附近设备" else "附近设备",
                 color = if (scanning.value) Color(0xFF2E66E9) else MaterialTheme.colorScheme.onSurfaceVariant,
