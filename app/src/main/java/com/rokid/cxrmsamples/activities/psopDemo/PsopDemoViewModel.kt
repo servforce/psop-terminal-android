@@ -210,6 +210,9 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     private var hwSyncFullRetryUsed = false         // 活性判败后整轮重来（init+发现+连接）是否已用过（最多 1 次）
     private var hwPhotoSyncRound = 0                // 同步轮次 token：每次 syncHardwarePhoto/活性重来递增，隔离旧轮次 SDK 回调
     private var isHwPhotoSyncing = false             // 是否正在 P2P 同步中
+    // 硬件拍照入口占位：回调可能来自非主线程，统一切到 Main 后先置位，
+    // 再启动 3s 写盘等待，防止相邻回调各自启动一套 P2P 同步并覆盖共享状态。
+    private var isHwPhotoRoundClaimed = false
     // ===== 拍照轮次串行排队（管线在途时新拍照键不打断，排队等当前轮终态后自动再来一轮） =====
     // 布尔足够无需真队列：startSync2 带回眼镜端全部未同步照片，排队轮一次消费全部，任何照片最多延迟一轮
     private var hwPhotoRoundPending = false          // 管线在途期间有新拍照键到达 → true，终态出口统一出队
@@ -325,37 +328,57 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
      * 通过 WiFi P2P 同步硬件拍摄的照片（保证照片是快门那一刻的，不会因人移动而拍错）
      */
     private val mediaFilesUpdateListener = MediaFilesUpdateListener {
+        // CXR 回调线程不固定。所有拍照轮状态都收敛到 Main，保证“检查 + 占位”原子执行。
+        viewModelScope.launch(Dispatchers.Main.immediate) {
+            onHardwarePhotoCaptured()
+        }
+    }
+
+    /** Main 线程上的眼镜硬件拍照入口：当前轮先占位，后续回调只排队。 */
+    private fun onHardwarePhotoCaptured() {
         Log.d(TAG, "onMediaFilesUpdated: glasses hardware photo button pressed")
         Log.e("PSOP_DEBUG", ">>> HW BUTTON: runId=${_uiState.value.runId}, mode=${_uiState.value.interactionMode}")
         if (_uiState.value.runId == null) {
             Log.w(TAG, "No active run, ignoring hardware photo button")
-            return@MediaFilesUpdateListener
+            return
         }
         // 录像中：忽略（录像流程不可被拍照轮打断）
         if (_uiState.value.interactionMode == InteractionMode.VIDEO_RECORDING) {
             Log.w(TAG, "Busy (VIDEO_RECORDING), ignoring hardware photo button")
-            return@MediaFilesUpdateListener
+            return
         }
         // 排队守卫：照片管线窗口内（拍照/同步/确认/上传/重建全程）不打断在途流程——
         // 置排队标志，当前轮终态后由 tryStartQueuedPhotoRound() 自动再来一轮（startSync2
         // 带回全部未同步照片，不丢轮）。替代原 PHOTO_CAPTURE/PHOTO_CONFIRM 忽略分支，
         // 并精确拦住原入口缺陷场景（RECONNECTING 期间 mode=LISTENING 曾被直接放行导致卡死）
-        if (isPhotoPipelineActive()) {
-            hwPhotoRoundPending = true
-            hwPhotoQueuedCount++
-            hwPhotoAutoRoundCount = 0  // 手动按键到达：重置自动轮计数（暂停状态也由此恢复）
-            val roundMsgId = hwPhotoSyncMsgId
-            if (roundMsgId != null) {
-                _uiState.update { state ->
-                    state.copy(messages = state.messages.map {
-                        if (it.id == roundMsgId) it.copy(content = "处理中，还有 $hwPhotoQueuedCount 张待回传…")
-                        else it
-                    })
-                }
-            }
-            Log.w(TAG, "photo round queued ($hwPhotoQueuedCount pending), mode=${_uiState.value.interactionMode}, p2pState=$p2pPersistState")
-            return@MediaFilesUpdateListener
+        if (isHwPhotoRoundClaimed || isPhotoPipelineActive()) {
+            queueHardwarePhotoRound()
+            return
         }
+        startHardwarePhotoRound()
+    }
+
+    /** 将后续眼镜拍照合并为下一轮回传，不创建第二套同步/P2P 状态。 */
+    private fun queueHardwarePhotoRound() {
+        hwPhotoRoundPending = true
+        hwPhotoQueuedCount++
+        hwPhotoAutoRoundCount = 0  // 手动按键到达：重置自动轮计数（暂停状态也由此恢复）
+        val roundMsgId = hwPhotoSyncMsgId
+        if (roundMsgId != null) {
+            _uiState.update { state ->
+                state.copy(messages = state.messages.map {
+                    if (it.id == roundMsgId) it.copy(content = "处理中，还有 $hwPhotoQueuedCount 张待回传…")
+                    else it
+                })
+            }
+        }
+        Log.w(TAG, "photo round queued ($hwPhotoQueuedCount pending), mode=${_uiState.value.interactionMode}, p2pState=$p2pPersistState")
+    }
+
+    /** 启动一轮眼镜照片回传。调用方必须在 Main 线程，且会立即占位。 */
+    private fun startHardwarePhotoRound() {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "Hardware photo round must start on Main" }
+        isHwPhotoRoundClaimed = true
         viewModelScope.launch {
             Log.e("PSOP_DEBUG", ">>> HW BUTTON: switching to PHOTO_CAPTURE, starting P2P photo sync")
             _uiState.update { it.copy(interactionMode = InteractionMode.PHOTO_CAPTURE) }
@@ -364,6 +387,11 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
             delay(3000L)  // 等待眼镜端照片写入完成
             syncHardwarePhoto()
         }
+    }
+
+    /** 当前眼镜照片轮已到终态，释放入口占位；下一轮仍由既有排队出口启动。 */
+    private fun releaseHardwarePhotoRound() {
+        isHwPhotoRoundClaimed = false
     }
 
     // AI事件监听器 — 眼镜触摸板长按/释放触发
@@ -2082,6 +2110,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
             _uiState.update { it.copy(interactionMode = InteractionMode.LISTENING) }
             // 既有缺口修复①：早退也是管线终态——触发常驻连接重建（状态多滞留 TORN_DOWN_FOR_UPLOAD），
             // 并 flush 排队消息（重建在进行中会被派发守卫重新入队，留到重建终态再发）
+            releaseHardwarePhotoRound()
             rebuildPersistentConnection()
             flushQueuedPhotoMessages()
             return
@@ -2101,6 +2130,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
             }
             _uiState.update { it.copy(interactionMode = InteractionMode.LISTENING) }
             // 既有缺口修复①：早退也是管线终态——触发重建 + flush 排队消息（重建在进行中会重新入队）
+            releaseHardwarePhotoRound()
             rebuildPersistentConnection()
             flushQueuedPhotoMessages()
             return
@@ -2181,6 +2211,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                     "succeeded", "failed", "cancelled", "aborted" -> _uiState.update { it.copy(interactionMode = InteractionMode.COMPLETED) }
                 }
                 // 上传结束（无论成败）重建常驻 P2P 连接（三级收敛，为下一次硬件拍照做准备）
+                releaseHardwarePhotoRound()
                 rebuildPersistentConnection()
             } catch (e: Exception) {
                 // 协程被 viewModelScope 取消（如离开页面）：直接抛出，无需更新状态；
@@ -2204,6 +2235,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                     "running" -> _uiState.update { it.copy(interactionMode = InteractionMode.PROCESSING) }
                     "succeeded", "failed", "cancelled", "aborted" -> _uiState.update { it.copy(interactionMode = InteractionMode.COMPLETED) }
                 }
+                releaseHardwarePhotoRound()
                 rebuildPersistentConnection()
             }
         }
@@ -2238,6 +2270,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         }
         // 既有缺口修复②：取消上传即管线终态——状态不能滞留 TORN_DOWN_FOR_UPLOAD（否则照片管线窗口
         // 永远开着、排队消息永不补发），触发三级重建收敛；排队消息随之 flush（重建在进行中会重新入队）
+        releaseHardwarePhotoRound()
         rebuildPersistentConnection()
         flushQueuedPhotoMessages()
     }
@@ -2273,13 +2306,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         }
         hwPhotoAutoRoundCount++
         Log.i(TAG, "starting queued photo round (auto=#$hwPhotoAutoRoundCount)")
-        viewModelScope.launch {
-            _uiState.update { it.copy(interactionMode = InteractionMode.PHOTO_CAPTURE) }
-            // 与硬件键入口同款：拍照前抢占 BLE，等待眼镜端照片写入完成后同步
-            stopTtsForPhotoCapture()
-            delay(3000L)
-            syncHardwarePhoto()
-        }
+        startHardwarePhotoRound()
     }
 
     /**
@@ -2577,6 +2604,13 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
      * 未预连接：回退到完整流程 initWifiP2P2 → 发现 → 连接 → startSync2
      */
     private fun syncHardwarePhoto() {
+        // 防御性兜底：即使未来有其它入口绕过了入口占位，也绝不覆盖当前轮的
+        // message ID、round token、P2P listener 与超时 Job；改为排队等本轮终态。
+        if (isHwPhotoSyncing || hwPhotoSyncMsgId != null) {
+            Log.w(TAG, "syncHardwarePhoto re-entry blocked; queue for next round")
+            queueHardwarePhotoRound()
+            return
+        }
         val msgId = "hwphoto-${System.currentTimeMillis()}"
         hwPhotoSyncMsgId = msgId
         isHwPhotoSyncing = true
@@ -3112,6 +3146,14 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         hwPhotoSyncMsgId = null
         if (msgId == null) {
             Log.w(TAG, "onHwPhotoSynced: hwPhotoSyncMsgId is null, photo consumed but no message to update (file=${file.name})")
+            // 这是不应出现的状态损坏；仍必须收敛管线，避免入口占位与 P2P 状态永久卡住。
+            when (_uiState.value.runStatus) {
+                "waiting_input" -> _uiState.update { it.copy(interactionMode = InteractionMode.LISTENING) }
+                "running" -> _uiState.update { it.copy(interactionMode = InteractionMode.PROCESSING) }
+                "succeeded", "failed", "cancelled", "aborted" -> _uiState.update { it.copy(interactionMode = InteractionMode.COMPLETED) }
+            }
+            releaseHardwarePhotoRound()
+            rebuildPersistentConnection()
             return
         }
         Log.d(TAG, "HW photo synced: ${file.name}, size=${file.length() / 1024}KB")
@@ -3207,6 +3249,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         scheduleP2pPreConnect()
         schedulePeriodicPreConnect()
         // 出队点⑤：失败终态——排队照片获得重试机会（mode 已回 LISTENING，管线已关）
+        releaseHardwarePhotoRound()
         tryStartQueuedPhotoRound()
     }
 
@@ -4477,6 +4520,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         ttsPreemptFlagResetJob = null
         // 清理 P2P 同步资源
         isHwPhotoSyncing = false
+        isHwPhotoRoundClaimed = false
         hwPhotoConnectTimeoutJob?.cancel()
         hwPhotoConnectTimeoutJob = null
         hwPhotoSyncTimeoutJob?.cancel()
