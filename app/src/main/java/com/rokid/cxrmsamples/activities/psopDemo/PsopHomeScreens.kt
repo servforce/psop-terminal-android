@@ -27,7 +27,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -63,7 +62,8 @@ fun PsopHomeScreen(
     onOpenSdkDebug: () -> Unit,
     onResumeRun: (RunResponse) -> Unit
 ) {
-    val activeRun = uiState.homeRuns.firstOrNull()
+    val activeRun = uiState.homeResumeRun
+    val recentRun = uiState.homeRecentRun
     Scaffold(
         containerColor = PsopPage,
         bottomBar = {
@@ -117,11 +117,11 @@ fun PsopHomeScreen(
                     Text("查看全部", color = PsopBlue, modifier = Modifier.clickable(onClick = onOpenHistory))
                 }
             }
-            if (activeRun != null) {
-                item { HomeRunCard(activeRun, uiState, onResumeRun) }
+            if (recentRun != null) {
+                item { HomeRecentRunCard(recentRun, uiState, onResumeRun) }
             } else if (!uiState.isLoadingHomeRuns) {
                 item {
-                    Text("暂无运行中的巡检", color = PsopSecondary, modifier = Modifier.padding(vertical = 16.dp))
+                    Text("暂无巡检记录", color = PsopSecondary, modifier = Modifier.padding(vertical = 16.dp))
                 }
             }
         }
@@ -195,28 +195,18 @@ private fun HomeShortcut(label: String, icon: androidx.compose.ui.graphics.vecto
 }
 
 @Composable
-private fun HomeRunCard(run: RunResponse, uiState: PsopDemoUiState, onResumeRun: (RunResponse) -> Unit) {
-    val progress = uiState.taskStatus?.progress
+private fun HomeRecentRunCard(run: RunResponse, uiState: PsopDemoUiState, onResumeRun: (RunResponse) -> Unit) {
     Surface(shape = RoundedCornerShape(24.dp), color = Color.White, modifier = Modifier.fillMaxWidth().clickable { onResumeRun(run) }) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(skillName(run, uiState), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                StatusChip("运行中", "running")
+                StatusChip(historyStatusLabel(run.status), run.status)
             }
-            if (progress != null && progress.total > 0) {
-                LinearProgressIndicator(
-                    progress = { progress.percent / 100f },
-                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp).height(12.dp),
-                    color = PsopBlue,
-                    trackColor = Color(0xFFE9EDF2)
-                )
-                Row(Modifier.fillMaxWidth().padding(top = 10.dp)) {
-                    Text("完成 ${progress.completed} / ${progress.total} 个步骤", color = PsopSecondary, modifier = Modifier.weight(1f))
-                    Text("${progress.percent}%", color = PsopBlue, fontWeight = FontWeight.Bold)
-                }
-            } else {
-                Text("点击继续巡检", color = PsopSecondary, modifier = Modifier.padding(top = 10.dp))
-            }
+            Text(
+                formatRunDate(run.updatedAt.ifBlank { run.createdAt }),
+                color = PsopSecondary,
+                modifier = Modifier.padding(top = 12.dp)
+            )
         }
     }
 }

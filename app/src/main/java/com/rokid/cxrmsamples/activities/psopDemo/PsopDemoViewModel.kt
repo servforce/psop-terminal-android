@@ -1,6 +1,7 @@
 package com.rokid.cxrmsamples.activities.psopDemo
 
 import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Looper
@@ -123,7 +124,10 @@ data class PsopDemoUiState(
     val skills: List<SkillSummaryResponse> = emptyList(),
     val selectedSkill: SkillSummaryResponse? = null,
     val invocations: List<RunResponse> = emptyList(),
-    val homeRuns: List<RunResponse> = emptyList(),
+    /** 首页“继续巡检”目标：本机最近打开且仍在运行的任务，或最近更新的运行中任务。 */
+    val homeResumeRun: RunResponse? = null,
+    /** 首页“最近巡检”目标：所有状态中最后更新的一条任务。 */
+    val homeRecentRun: RunResponse? = null,
     val isLoadingHomeRuns: Boolean = false,
     /** 仅在 CXR SDK 成功返回时展示，避免用占位电量误导现场人员。 */
     val glassBatteryLevel: Int? = null,
@@ -156,6 +160,8 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     companion object {
         private const val TAG = "PsopDemoVM"
         private val TERMINAL_STATES = setOf("succeeded", "failed", "cancelled", "aborted")
+        private const val HOME_RUN_PREFERENCES = "psop_home_run"
+        private const val LAST_OPENED_ACTIVE_RUN_ID = "last_opened_active_run_id"
     }
 
     // ===== ASR 相关字段 =====
@@ -746,12 +752,80 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         else -> status?.let { listOf(it) }
     }
 
+    private fun isActiveRun(run: RunResponse): Boolean =
+        run.status in setOf("running", "waiting_input", "accepted")
+
+    /** 新建或打开运行中任务时记录，首页“继续巡检”优先恢复该任务。 */
+    private fun rememberLastOpenedActiveRun(runId: String) {
+        getApplication<Application>()
+            .getSharedPreferences(HOME_RUN_PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .putString(LAST_OPENED_ACTIVE_RUN_ID, runId)
+            .apply()
+    }
+
+    private fun lastOpenedActiveRunId(): String? =
+        getApplication<Application>()
+            .getSharedPreferences(HOME_RUN_PREFERENCES, Context.MODE_PRIVATE)
+            .getString(LAST_OPENED_ACTIVE_RUN_ID, null)
+
+    private fun clearLastOpenedActiveRun() {
+        getApplication<Application>()
+            .getSharedPreferences(HOME_RUN_PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .remove(LAST_OPENED_ACTIVE_RUN_ID)
+            .apply()
+    }
+
+    /**
+     * 后端运行列表没有约定排序时，首页始终按最后更新时间降序选择。
+     * ISO 时间解析异常的记录保持服务端原始相对顺序，作为稳定降级。
+     */
+    private fun sortRunsByUpdatedAt(runs: List<RunResponse>): List<RunResponse> =
+        runs.withIndex().sortedWith { left, right ->
+            val leftTime = parseRunTimestamp(left.value.updatedAt)
+            val rightTime = parseRunTimestamp(right.value.updatedAt)
+            when {
+                leftTime != null && rightTime != null -> rightTime.compareTo(leftTime)
+                leftTime != null -> -1
+                rightTime != null -> 1
+                else -> left.index.compareTo(right.index)
+            }
+        }.map { it.value }
+
+    private fun parseRunTimestamp(value: String): Long? {
+        if (value.isBlank()) return null
+        return try {
+            java.time.OffsetDateTime.parse(value).toInstant().toEpochMilli()
+        } catch (_: Exception) {
+            try {
+                java.time.Instant.parse(value).toEpochMilli()
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
     private fun loadHomeRuns() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingHomeRuns = true) }
             try {
-                val runs = repository.listRuns(status = statusListFor("running"))
-                _uiState.update { it.copy(homeRuns = runs, isLoadingHomeRuns = false) }
+                val runs = sortRunsByUpdatedAt(repository.listRuns())
+                val activeRuns = runs.filter(::isActiveRun)
+                val storedRunId = lastOpenedActiveRunId()
+                val resumeRun = activeRuns.firstOrNull { it.id == storedRunId }
+                    ?: activeRuns.firstOrNull()
+                if (storedRunId != null && resumeRun?.id != storedRunId) {
+                    // 本机记录已终态或不可见，移除后避免下次继续尝试陈旧任务。
+                    clearLastOpenedActiveRun()
+                }
+                _uiState.update {
+                    it.copy(
+                        homeResumeRun = resumeRun,
+                        homeRecentRun = runs.firstOrNull(),
+                        isLoadingHomeRuns = false
+                    )
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to load home runs", e)
                 _uiState.update { it.copy(isLoadingHomeRuns = false) }
@@ -1631,6 +1705,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 lastSeqNo = 0
                 val response = repository.createInvocation(key)
                 val runId = response.runId ?: return@launch
+                rememberLastOpenedActiveRun(runId)
                 _uiState.update { it.copy(runId = runId) }
                 // 连接 WebSocket 接收实时事件
                 repository.connectWebSocket(runId)
@@ -1651,6 +1726,9 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     fun resumeInvocation(invocation: RunResponse) {
         val runId = invocation.id
         val matchingSkill = _uiState.value.skills.firstOrNull { it.id == invocation.skillDefinitionId }
+        if (isActiveRun(invocation)) {
+            rememberLastOpenedActiveRun(runId)
+        }
         // 重新注册 AI 事件监听器（上次巡检结束时会被置 null）
         CxrApi.getInstance().setAiEventListener(aiEventListener)
         // 重新注册媒体文件更新监听器
