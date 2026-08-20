@@ -52,7 +52,6 @@ import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -725,18 +724,6 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
                                             modifier = Modifier.padding(horizontal = 8.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = Color(0xFF2E66E9),
-                                                modifier = Modifier.size(48.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Mic,
-                                                    contentDescription = "眼镜语音输入",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.padding(12.dp)
-                                                )
-                                            }
                                             Text(
                                                 text = when (uiState.interactionMode) {
                                                     InteractionMode.LISTENING -> uiState.asrText.ifBlank { "正在聆听…" }
@@ -744,7 +731,7 @@ private fun InteractionScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiS
                                                     InteractionMode.PHOTO_CAPTURE -> "正在接收眼镜照片…"
                                                     else -> "长按触摸板说话，或输入文字…"
                                                 },
-                                                modifier = Modifier.weight(1f).padding(start = 14.dp),
+                                                modifier = Modifier.weight(1f).padding(start = 12.dp),
                                                 style = MaterialTheme.typography.bodyLarge,
                                                 color = PsopTextHint,
                                                 maxLines = 1
@@ -1273,20 +1260,33 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
                         }
                     }
                     taskStatus.stages.take(3).forEach { stage ->
-                        val isCurrent = stage.id == taskStatus.currentStageId
-                        val dotColor = if (isCurrent) Color(0xFF2E66E9) else Color(0xFFA0AABB)
+                        val stagePresentation = when {
+                            stage.status == "completed" -> StagePresentation(
+                                color = Color(0xFF10B981),
+                                label = "已完成"
+                            )
+                            stage.id == taskStatus.currentStageId ||
+                                stage.status in setOf("in_progress", "waiting_input") -> StagePresentation(
+                                color = Color(0xFF2E66E9),
+                                label = "进行中"
+                            )
+                            else -> StagePresentation(
+                                color = Color(0xFFA0AABB),
+                                label = "未完成"
+                            )
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Circle, null, tint = dotColor, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Circle, null, tint = stagePresentation.color, modifier = Modifier.size(16.dp))
                             Text(
                                 stage.title,
-                                color = if (isCurrent) Color(0xFF2E66E9) else PsopTextSecondary,
+                                color = stagePresentation.color,
                                 modifier = Modifier.weight(1f).padding(start = 14.dp),
                                 style = MaterialTheme.typography.titleMedium
                             )
-                            if (isCurrent) Text("当前", color = Color(0xFF2E66E9), style = MaterialTheme.typography.titleMedium)
+                            Text(stagePresentation.label, color = stagePresentation.color, style = MaterialTheme.typography.titleMedium)
                         }
                     }
                 }
@@ -1294,6 +1294,8 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
         }
     }
 }
+
+private data class StagePresentation(val color: Color, val label: String)
 
 private fun translateStageStatus(status: String): String {
     return when (status.lowercase()) {
