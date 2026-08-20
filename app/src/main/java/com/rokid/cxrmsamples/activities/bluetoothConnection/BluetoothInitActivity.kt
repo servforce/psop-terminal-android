@@ -59,7 +59,7 @@ class BluetoothInitActivity : ComponentActivity() {
         setContent {
             PsopTheme {
                 BluetoothConnectionScreen(viewModel = viewModel, reconnect = {
-                    viewModel.connectBTSocket(this)
+                    viewModel.reconnectSavedDevice(this)
                 }, scan = {
                     viewModel.handleScan(btManager.adapter.bluetoothLeScanner)
                 }, onItemClicked = { deviceItem ->

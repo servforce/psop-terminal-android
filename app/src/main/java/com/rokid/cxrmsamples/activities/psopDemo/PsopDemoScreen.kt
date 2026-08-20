@@ -102,6 +102,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -1203,7 +1204,11 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
     val task = taskStatus.task
     val progress = taskStatus.progress
     val currentStage = taskStatus.stages.find { it.id == taskStatus.currentStageId }
-    val prompt = currentStage?.goal?.takeIf { it.isNotBlank() } ?: task?.skillName ?: "任务进行中"
+    val stageTitle = currentStage?.title?.takeIf { it.isNotBlank() } ?: task?.skillName ?: "任务进行中"
+    val stageGoal = currentStage?.goal?.takeIf { it.isNotBlank() }
+    val statusReason = currentStage?.statusReason?.trim().orEmpty()
+    val shouldShowStatusReason = statusReason.isNotBlank() && statusReason != stageGoal &&
+        currentStage?.status in setOf("waiting_input", "failed", "aborted", "cancelled")
     var isExpanded by rememberSaveable { mutableStateOf(true) }
     Surface(
         color = Color.White,
@@ -1213,7 +1218,7 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
         Column(modifier = Modifier.padding(28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = prompt,
+                    text = stageTitle,
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.weight(1f)
                 )
@@ -1224,6 +1229,16 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
                         tint = PsopTextSecondary
                     )
                 }
+            }
+            stageGoal?.let { goal ->
+                Text(
+                    text = goal,
+                    color = PsopTextSecondary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
             AnimatedVisibility(
                 visible = isExpanded,
@@ -1241,6 +1256,20 @@ private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
                         Row(Modifier.fillMaxWidth().padding(top = 22.dp)) {
                             Text("${progress.completed} / ${progress.total} 完成", color = PsopTextSecondary, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                             Text("${progress.percent}%", color = Color(0xFF2E66E9), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    if (shouldShowStatusReason) {
+                        Surface(
+                            color = Color(0xFFFFF3DF),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                        ) {
+                            Text(
+                                text = statusReason,
+                                color = Color(0xFF9A5B00),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                            )
                         }
                     }
                     taskStatus.stages.take(3).forEach { stage ->

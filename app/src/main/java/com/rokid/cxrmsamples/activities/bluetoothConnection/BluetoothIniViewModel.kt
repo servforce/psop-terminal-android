@@ -3,6 +3,7 @@ package com.rokid.cxrmsamples.activities.bluetoothConnection
 // 文档参考：01设备连接 - 扫描与连接（BLE 扫描、initBluetooth、connectBluetooth、BluetoothStatusCallback）
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
@@ -15,6 +16,7 @@ import android.util.Log
 import androidx.core.content.edit
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.rokid.cxr.client.extend.CxrApi
 import com.rokid.cxr.client.extend.callbacks.BluetoothStatusCallback
 import com.rokid.cxr.client.utils.ValueUtil
@@ -24,6 +26,9 @@ import com.rokid.cxrmsamples.dataBeans.CONSTANT
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 data class DeviceItem(
     val device: BluetoothDevice?,
@@ -63,6 +68,8 @@ class BluetoothIniViewModel : ViewModel() {
     private val _connectionError: MutableStateFlow<String?> = MutableStateFlow(null)
     val connectionError: StateFlow<String?> = _connectionError.asStateFlow()
 
+    private var connectionTimeoutJob: Job? = null
+
     val toConnect = MutableLiveData<Boolean>()
 
     // Bluetooth connection state callback
@@ -92,6 +99,8 @@ class BluetoothIniViewModel : ViewModel() {
                     toConnect.postValue(true)
                 } else {
                     Log.d(TAG, "Device already connected")
+                    _connected.value = true
+                    completeConnection()
                 }
             } else { // If device info does not match, update records and post toConnect
                 Log.d(TAG, "New device info received")
@@ -114,8 +123,7 @@ class BluetoothIniViewModel : ViewModel() {
             Log.d(TAG, "Bluetooth device connected successfully")
             _devicesList.value = emptyList()
             _connected.value = true
-            _connecting.value = false
-            _connectionError.value = null
+            completeConnection()
         }
 
         /**
@@ -124,6 +132,8 @@ class BluetoothIniViewModel : ViewModel() {
          */
         override fun onDisconnected() {
             Log.d(TAG, "Bluetooth device disconnected")
+            connectionTimeoutJob?.cancel()
+            connectionTimeoutJob = null
             _connecting.value = false
             _connected.value = false
         }
@@ -139,6 +149,8 @@ class BluetoothIniViewModel : ViewModel() {
          */
         override fun onFailed(p0: ValueUtil.CxrBluetoothErrorCode?) {
             Log.e(TAG, "Bluetooth connection failed with error: $p0")
+            connectionTimeoutJob?.cancel()
+            connectionTimeoutJob = null
             _connecting.value = false
             _connected.value = false
             _connectionError.value = "连接失败，请重试"
@@ -311,8 +323,7 @@ class BluetoothIniViewModel : ViewModel() {
             TAG,
             "Reconnecting to device: uuid=$uuid, mac=$macAddress"
         )
-        _connecting.value = true
-        _connectionError.value = null
+        beginConnection()
         // 文档 01设备连接：connectBluetooth(uuid, macAddress, callback, SN文件, clientSecret)
         try {
             CxrApi.getInstance().connectBluetooth(
@@ -326,10 +337,64 @@ class BluetoothIniViewModel : ViewModel() {
         }catch (e: Exception){
             Log.d(TAG, "Error: ${e.message}")
             e.printStackTrace()
+            connectionTimeoutJob?.cancel()
+            connectionTimeoutJob = null
             _connecting.value = false
             _connectionError.value = "连接失败，请重试"
         }
 
+    }
+
+    /**
+     * 已保存设备的重连也先走 initBluetooth。
+     *
+     * 扫描后连接的成功路径是 initBluetooth → onConnectionInfo → connectBluetooth；
+     * 直接跳过 initBluetooth 会使用陈旧的 SDK 会话信息，导致同一副眼镜只能重新扫描后连接。
+     */
+    @SuppressLint("MissingPermission")
+    fun reconnectSavedDevice(context: Context) {
+        val macAddress = _recordMacAddress.value
+        if (macAddress.isNullOrBlank()) {
+            _connectionError.value = "未找到已保存的设备信息"
+            return
+        }
+        try {
+            val device = BluetoothAdapter.getDefaultAdapter()?.getRemoteDevice(macAddress)
+            if (device == null) {
+                _connectionError.value = "未找到已保存的眼镜"
+                return
+            }
+            Log.d(TAG, "Reinitializing saved device before reconnect: mac=$macAddress")
+            beginConnection()
+            CxrApi.getInstance().initBluetooth(context, device, connectionState)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize saved device for reconnect", e)
+            connectionTimeoutJob?.cancel()
+            connectionTimeoutJob = null
+            _connecting.value = false
+            _connectionError.value = "连接失败，请重试"
+        }
+    }
+
+    private fun beginConnection() {
+        _connecting.value = true
+        _connectionError.value = null
+        connectionTimeoutJob?.cancel()
+        connectionTimeoutJob = viewModelScope.launch {
+            delay(15_000)
+            if (_connecting.value && !_connected.value) {
+                Log.w(TAG, "Bluetooth connection timed out")
+                _connecting.value = false
+                _connectionError.value = "连接超时，请确认眼镜已开机并靠近手机"
+            }
+        }
+    }
+
+    private fun completeConnection() {
+        connectionTimeoutJob?.cancel()
+        connectionTimeoutJob = null
+        _connecting.value = false
+        _connectionError.value = null
     }
 
 
@@ -342,9 +407,8 @@ class BluetoothIniViewModel : ViewModel() {
             Log.d(TAG, "Device clicked: name=${it.name}, address=${it.macAddress}")
             _recordName.value = it.name
             // 文档 01设备连接：initBluetooth 获取 uuid/macAddress 后需再调用 connectBluetooth
+            beginConnection()
             CxrApi.getInstance().initBluetooth(context, it.device, connectionState)
-            _connecting.value = true
-            _connectionError.value = null
         }
     }
 
@@ -371,6 +435,8 @@ class BluetoothIniViewModel : ViewModel() {
      */
     fun disconnect() {
         CxrApi.getInstance().deinitBluetooth()
+        connectionTimeoutJob?.cancel()
+        connectionTimeoutJob = null
         _connecting.value = false
         _connected.value = false
         _connectionError.value = null
