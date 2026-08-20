@@ -373,8 +373,8 @@ private fun formatRunDate(value: String): String {
     val normalized = value.replace("T", " ").substringBefore(".")
     val date = normalized.substringBefore(" ")
     val time = normalized.substringAfter(" ", "")
-    return if (date.length >= 10 && time.length >= 5) {
-        "${date.substring(5).replace("-", "/")} ${time.take(5)}"
+    return if (date.length >= 10 && time.length >= 8) {
+        "$date ${time.take(8)}"
     } else {
         normalized
     }
