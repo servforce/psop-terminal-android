@@ -343,8 +343,7 @@ private fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunClic
             Text(
                 formatRunDate(run.createdAt),
                 color = PsopSecondary,
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.End
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
             )
             if (run.status == "running" || run.status == "waiting_input") {
                 Text("继续", color = PsopBlue, fontWeight = FontWeight.Medium, modifier = Modifier.align(Alignment.End).padding(top = 12.dp))
