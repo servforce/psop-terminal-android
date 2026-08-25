@@ -89,6 +89,7 @@ dependencies {
         exclude(group = "com.rokid.cxr", module = "client-m-sources")
     }
 
-    // Sherpa-ONNX 离线语音识别（AAR 放在 app/libs/ 目录）
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
+    // 统一使用这一份 Sherpa-ONNX：同时提供离线 ASR 与手机端离线 TTS。
+    // 不使用 fileTree，避免开发机遗留的旧版本 AAR 被一并引入而产生重复类。
+    implementation(files("libs/sherpa-onnx-1.13.6.aar"))
 }
