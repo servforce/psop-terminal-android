@@ -26,6 +26,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -46,6 +47,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -378,6 +380,14 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var showMenu by remember { mutableStateOf(false) }
     var showChat by rememberSaveable { mutableStateOf(false) }
     var isCaptureMode by rememberSaveable { mutableStateOf(false) }
+    val selectedModeOffset by animateDpAsState(
+        targetValue = when {
+            showMenu -> (-52).dp
+            isCaptureMode -> 0.dp
+            else -> 52.dp
+        },
+        label = "mobileModeAlignment"
+    )
     var captureStatus by remember { mutableStateOf<String?>(null) }
     var isAwaitingAiReply by remember { mutableStateOf(false) }
     var aiReplyBaselineCount by remember { mutableStateOf(0) }
@@ -663,11 +673,11 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 }
             }
             Row(
-                modifier = Modifier.padding(bottom = 12.dp),
+                modifier = Modifier.offset(x = selectedModeOffset).padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(26.dp)
             ) {
                 Text(
-                    "语音提问",
+                    "语音",
                     color = if (!isCaptureMode && !showMenu) MobileModeAccent else Color(0xFFB8C4D6),
                     fontSize = 13.sp,
                     fontWeight = if (!isCaptureMode && !showMenu) FontWeight.Bold else FontWeight.Normal,
