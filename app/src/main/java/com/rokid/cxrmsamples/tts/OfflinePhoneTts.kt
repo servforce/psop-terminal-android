@@ -83,8 +83,8 @@ class OfflinePhoneTts(context: Context) {
                 model = OfflineTtsModelConfig(
                     vits = OfflineTtsVitsModelConfig(
                         model = File(modelDir, MODEL_FILE).absolutePath,
+                        lexicon = File(modelDir, LEXICON_FILE).absolutePath,
                         tokens = File(modelDir, TOKENS_FILE).absolutePath,
-                        dataDir = File(modelDir, ESPEAK_DATA_DIR).absolutePath,
                         noiseScale = 0.667f,
                         noiseScaleW = 0.8f,
                         lengthScale = 1.0f,
@@ -93,6 +93,9 @@ class OfflinePhoneTts(context: Context) {
                     debug = true,
                     provider = "cpu",
                 ),
+                ruleFsts = RULE_FST_FILES.joinToString(",") { file ->
+                    File(modelDir, file).absolutePath
+                },
             )
             OfflineTts(config = config).also {
                 engine = it
@@ -107,12 +110,18 @@ class OfflinePhoneTts(context: Context) {
     private fun prepareModelFiles(): File {
         val targetDir = File(appContext.filesDir, MODEL_DIR)
         val modelFile = File(targetDir, MODEL_FILE)
-        if (!modelFile.exists() || modelFile.length() < MIN_MODEL_BYTES) {
+        val requiredFiles = listOf(MODEL_FILE, LEXICON_FILE, TOKENS_FILE) + RULE_FST_FILES
+        val requiresExtraction = !modelFile.exists() ||
+            modelFile.length() < MIN_MODEL_BYTES ||
+            requiredFiles.any { file -> !File(targetDir, file).isFile }
+        if (requiresExtraction) {
             Log.i(TAG, "Extracting offline phone TTS model from assets")
             targetDir.deleteRecursively()
             copyAssetTree(ASSET_MODEL_DIR, targetDir)
         }
-        check(modelFile.exists()) { "Offline phone TTS model is missing: ${modelFile.absolutePath}" }
+        check(requiredFiles.all { file -> File(targetDir, file).isFile }) {
+            "Offline phone TTS files are incomplete: ${targetDir.absolutePath}"
+        }
         return targetDir
     }
 
@@ -189,12 +198,13 @@ class OfflinePhoneTts(context: Context) {
         const val TAG = "OfflinePhoneTts"
         const val ASSET_MODEL_DIR = "sherpa-tts-models"
         const val MODEL_DIR = "sherpa-tts-models"
-        const val MODEL_FILE = "zh_CN-huayan-medium.onnx"
+        const val MODEL_FILE = "model.onnx"
+        const val LEXICON_FILE = "lexicon.txt"
         const val TOKENS_FILE = "tokens.txt"
-        const val ESPEAK_DATA_DIR = "espeak-ng-data"
-        const val MIN_MODEL_BYTES = 50L * 1024L * 1024L
+        val RULE_FST_FILES = listOf("phone.fst", "date.fst", "number.fst")
+        const val MIN_MODEL_BYTES = 20L * 1024L * 1024L
         const val COPY_BUFFER_SIZE = 32 * 1024
-        const val SPEAKER_ID = 0
+        const val SPEAKER_ID = 33
         const val SPEECH_SPEED = 1.0f
     }
 }
