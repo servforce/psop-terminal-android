@@ -49,7 +49,6 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
@@ -104,7 +103,6 @@ import kotlinx.coroutines.withContext
 private val MobileBlue = Color(0xFF2E66E9)
 private val MobileModeAccent = Color(0xFFFF6900)
 private val ArOverlayGreen = Color(0xFF00E676)
-private val ArOverlayGreenSoft = Color(0xFFD6FFE1)
 internal val MobileActiveRunStatuses = setOf("accepted", "running", "waiting_input")
 
 private const val MOBILE_ASR_SAMPLE_RATE = 16_000
@@ -350,6 +348,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var arAiReply by remember { mutableStateOf<String?>(null) }
     val voiceModeInteraction = remember { MutableInteractionSource() }
     val captureModeInteraction = remember { MutableInteractionSource() }
+    val moreModeInteraction = remember { MutableInteractionSource() }
     var captureFrame by remember { mutableStateOf<(() -> Bitmap?)?>(null) }
     val context = LocalContext.current
     var hasCameraPermission by remember {
@@ -482,38 +481,6 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         } else {
             CameraPermissionContent(onRequestPermission = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) })
         }
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(18.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xC9162A44))
-                .padding(horizontal = 12.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(uiState.selectedSkill?.name ?: "当前巡检任务", color = Color.White, fontSize = 12.sp)
-                Text(
-                    "任务进行中 · 现场画面",
-                    color = Color(0xFFD7E4FF),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-        Box(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
-            IconButton(
-                onClick = { showMenu = true },
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xD9162A44))
-            ) {
-                Icon(Icons.Default.MoreVert, contentDescription = "更多功能", tint = Color.White)
-            }
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                DropdownMenuItem(text = { Text("AI 对话") }, onClick = { showMenu = false; showChat = true })
-            }
-        }
         when {
             isAwaitingAiReply -> {
                 ArAiReplyCard(
@@ -545,7 +512,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             }
             Row(
                 modifier = Modifier.padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(28.dp)
+                horizontalArrangement = Arrangement.spacedBy(26.dp)
             ) {
                 Text(
                     "语音提问",
@@ -567,6 +534,24 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                         indication = null
                     ) { isCaptureMode = true }
                 )
+                Box {
+                    Text(
+                        "更多",
+                        color = if (showMenu) MobileModeAccent else Color(0xFFB8C4D6),
+                        fontSize = 13.sp,
+                        fontWeight = if (showMenu) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.clickable(
+                            interactionSource = moreModeInteraction,
+                            indication = null
+                        ) { showMenu = true }
+                    )
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("AI 对话") },
+                            onClick = { showMenu = false; showChat = true }
+                        )
+                    }
+                }
             }
             Surface(
                 shape = CircleShape,
@@ -612,7 +597,7 @@ private fun ArAiReplyCard(text: String, modifier: Modifier = Modifier) {
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Text("AI 现场提示", color = ArOverlayGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text(text, color = ArOverlayGreenSoft, fontSize = 14.sp, maxLines = 4, modifier = Modifier.padding(top = 5.dp))
+            Text(text, color = ArOverlayGreen, fontSize = 14.sp, maxLines = 4, modifier = Modifier.padding(top = 5.dp))
         }
     }
 }
