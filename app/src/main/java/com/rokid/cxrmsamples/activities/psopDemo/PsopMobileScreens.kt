@@ -26,6 +26,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -93,6 +94,8 @@ import kotlinx.coroutines.delay
 
 private val MobileBlue = Color(0xFF2E66E9)
 private val MobileModeAccent = Color(0xFFFF6900)
+private val ArOverlayGreen = Color(0xFF00E676)
+private val ArOverlayGreenSoft = Color(0xFFD6FFE1)
 internal val MobileActiveRunStatuses = setOf("accepted", "running", "waiting_input")
 
 @Composable
@@ -222,6 +225,8 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var isAwaitingAiReply by remember { mutableStateOf(false) }
     var aiReplyBaselineCount by remember { mutableStateOf(0) }
     var arAiReply by remember { mutableStateOf<String?>(null) }
+    val voiceModeInteraction = remember { MutableInteractionSource() }
+    val captureModeInteraction = remember { MutableInteractionSource() }
     var captureFrame by remember { mutableStateOf<(() -> Bitmap?)?>(null) }
     val context = LocalContext.current
     var hasCameraPermission by remember {
@@ -427,14 +432,20 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     color = if (!isCaptureMode) MobileModeAccent else Color(0xFFB8C4D6),
                     fontSize = 13.sp,
                     fontWeight = if (!isCaptureMode) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.clickable { isCaptureMode = false }
+                    modifier = Modifier.clickable(
+                        interactionSource = voiceModeInteraction,
+                        indication = null
+                    ) { isCaptureMode = false }
                 )
                 Text(
                     "拍摄",
                     color = if (isCaptureMode) MobileModeAccent else Color(0xFFB8C4D6),
                     fontSize = 13.sp,
                     fontWeight = if (isCaptureMode) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.clickable { isCaptureMode = true }
+                    modifier = Modifier.clickable(
+                        interactionSource = captureModeInteraction,
+                        indication = null
+                    ) { isCaptureMode = true }
                 )
             }
             Surface(
@@ -473,13 +484,14 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
 @Composable
 private fun ArAiReplyCard(text: String, modifier: Modifier = Modifier) {
     Surface(
-        color = Color(0xE9162A44),
+        color = Color(0x3000E676),
         shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, ArOverlayGreen),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text("AI 现场提示", color = MobileModeAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text(text, color = Color.White, fontSize = 14.sp, maxLines = 4, modifier = Modifier.padding(top = 5.dp))
+            Text("AI 现场提示", color = ArOverlayGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(text, color = ArOverlayGreenSoft, fontSize = 14.sp, maxLines = 4, modifier = Modifier.padding(top = 5.dp))
         }
     }
 }
