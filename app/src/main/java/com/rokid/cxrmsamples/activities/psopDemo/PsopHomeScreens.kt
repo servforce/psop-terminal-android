@@ -85,7 +85,7 @@ fun PsopHomeScreen(
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("PSOP 智能巡检", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Text("PSOP 智能巡检1", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                     IconButton(onClick = onOpenSdkDebug) { Icon(Icons.Default.Settings, contentDescription = "SDK 调试", tint = PsopSecondary) }
                 }
             }
