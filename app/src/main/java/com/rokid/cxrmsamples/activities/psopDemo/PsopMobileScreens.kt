@@ -119,6 +119,12 @@ fun PsopMobileHomeScreen(
     onChangeMode: () -> Unit
 ) {
     val activeRun = uiState.homeResumeRun
+    val activeTaskName = activeRun?.let { run ->
+        uiState.skills.find { it.id == run.skillDefinitionId }?.name ?: "进行中的巡检任务"
+    } ?: "暂无进行中的任务"
+    val taskDescription = activeRun?.currentStep
+        ?.let { "当前步骤：$it" }
+        ?: if (activeRun == null) "请从任务列表选择任务开始执行" else "任务可继续执行"
     Scaffold(
         containerColor = Color(0xFFF5F7FA),
         bottomBar = {
@@ -144,8 +150,8 @@ fun PsopMobileHomeScreen(
             Surface(shape = RoundedCornerShape(24.dp), color = Color.White, border = BorderStroke(1.dp, Color(0xFFE0E7F0))) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text(if (activeRun == null) "待开始任务" else "已暂存任务", color = MobileBlue, fontSize = 12.sp)
-                    Text("电脑主机安装", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(if (activeRun == null) "共 7 个步骤 · 从第一步开始学习" else "可继续当前任务", color = Color(0xFF6B7688))
+                    Text(activeTaskName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(taskDescription, color = Color(0xFF6B7688))
                 }
             }
             Button(
@@ -154,7 +160,7 @@ fun PsopMobileHomeScreen(
                 shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MobileBlue)
             ) {
-                Text(if (activeRun == null) "开始任务" else "继续任务", fontSize = 17.sp)
+                Text(if (activeRun == null) "查看任务" else "继续任务", fontSize = 17.sp)
             }
         }
     }
@@ -212,7 +218,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(uiState.selectedSkill?.name ?: "电脑主机安装", color = Color.White, fontSize = 12.sp)
+                Text(uiState.selectedSkill?.name ?: "当前巡检任务", color = Color.White, fontSize = 12.sp)
                 Text(
                     if (arState == MobileArState.COMPLETE) "01 / 01 · 已通过" else "01 / 07 · 实时识别中",
                     color = Color(0xFFD7E4FF),
