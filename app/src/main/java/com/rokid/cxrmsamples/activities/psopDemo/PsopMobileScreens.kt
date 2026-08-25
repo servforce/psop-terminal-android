@@ -22,6 +22,12 @@ import android.view.TextureView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,13 +42,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardVoice
@@ -84,6 +93,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalDensity
@@ -391,7 +401,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         } else {
             isListening = true
             isVoiceCancelArmed = false
-            captureStatus = "松开发送"
+            captureStatus = "正在聆听 · 松开发送"
         }
     }
 
@@ -400,7 +410,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         isListening = false
         isVoiceCancelArmed = false
         isRecognizingVoice = true
-        captureStatus = "正在离线识别…"
+        captureStatus = null
         coroutineScope.launch {
             val result = offlineAsrRecorder.stopAndRecognize()
             isRecognizingVoice = false
@@ -479,7 +489,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     val currentIsVoiceCancelArmed by rememberUpdatedState(newValue = isVoiceCancelArmed)
     val currentUpdateVoiceCancelHint by rememberUpdatedState(newValue = { cancelArmed: Boolean ->
         isVoiceCancelArmed = cancelArmed
-        captureStatus = if (cancelArmed) "松开取消" else "松开发送"
+        captureStatus = if (cancelArmed) "松开取消" else "正在聆听 · 松开发送"
     })
     val currentRequestMicrophonePermission by rememberUpdatedState(newValue = {
         microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -513,13 +523,13 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             isAwaitingAiReply -> {
                 ArAiReplyCard(
                     text = "AI 正在分析现场信息…",
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 170.dp)
+                    modifier = Modifier.align(Alignment.TopCenter).padding(start = 20.dp, end = 20.dp, top = 28.dp)
                 )
             }
             arAiReply != null -> {
                 ArAiReplyCard(
                     text = arAiReply!!,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 170.dp)
+                    modifier = Modifier.align(Alignment.TopCenter).padding(start = 20.dp, end = 20.dp, top = 28.dp)
                 )
             }
         }
@@ -593,6 +603,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                             if (hasCameraPermission) captureAndUpload() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                         }
                     ) {
+                        if (isListening) ListeningVoiceWaves()
                         Icon(
                             imageVector = Icons.Default.CameraAlt,
                             contentDescription = "拍摄并校验",
@@ -651,17 +662,57 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
 
 @Composable
 private fun ArAiReplyCard(text: String, modifier: Modifier = Modifier) {
+    val scrollState = rememberScrollState()
     Surface(
         color = Color(0x3000E676),
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, ArOverlayGreen),
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth().heightIn(max = 330.dp)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(scrollState)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+        ) {
             Text("AI 现场提示", color = ArOverlayGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text(text, color = ArOverlayGreen, fontSize = 14.sp, maxLines = 4, modifier = Modifier.padding(top = 5.dp))
+            Text(text, color = ArOverlayGreen, fontSize = 14.sp, modifier = Modifier.padding(top = 5.dp))
         }
     }
+}
+
+@Composable
+private fun ListeningVoiceWaves() {
+    val transition = rememberInfiniteTransition(label = "mobileVoiceWave")
+    val outerScale by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.58f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 860, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "outerWaveScale"
+    )
+    val innerScale by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 860, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "innerWaveScale"
+    )
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .scale(outerScale)
+            .border(1.dp, MobileBlue.copy(alpha = 0.58f), CircleShape)
+    )
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .scale(innerScale)
+            .border(1.dp, MobileBlue.copy(alpha = 0.42f), CircleShape)
+    )
 }
 
 @Composable
