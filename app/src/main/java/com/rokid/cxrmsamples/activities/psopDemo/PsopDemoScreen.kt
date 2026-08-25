@@ -1209,7 +1209,7 @@ fun MessageBubble(
  * 可折叠的任务进度面板，显示在消息列表上方
  */
 @Composable
-private fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
+internal fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
     val task = taskStatus.task
     val progress = taskStatus.progress
     val currentStage = taskStatus.stages.find { it.id == taskStatus.currentStageId }

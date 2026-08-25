@@ -335,7 +335,6 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("AI 对话") }, onClick = { showMenu = false; showChat = true })
-                DropdownMenuItem(text = { Text("暂存并退出") }, onClick = { showMenu = false; viewModel.navigateBack() })
             }
         }
         Surface(
@@ -533,15 +532,20 @@ private fun MobileTaskChatScreen(
             }
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                Text("当前处于 AR 任务中。描述问题后，返回 AR 继续实时识别。", color = Color(0xFF60708A), modifier = Modifier.padding(vertical = 12.dp))
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            uiState.taskStatus?.let { taskStatus ->
+                TaskProgressPanel(taskStatus = taskStatus)
             }
-            items(uiState.messages, key = { it.id }) { message ->
-                MessageBubble(message = message)
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    Text("当前处于 AR 任务中。描述问题后，返回 AR 继续实时识别。", color = Color(0xFF60708A), modifier = Modifier.padding(vertical = 12.dp))
+                }
+                items(uiState.messages, key = { it.id }) { message ->
+                    MessageBubble(message = message)
+                }
             }
         }
     }
