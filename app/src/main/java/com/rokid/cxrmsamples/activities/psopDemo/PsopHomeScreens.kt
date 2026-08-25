@@ -131,13 +131,13 @@ fun PsopHomeScreen(
     }
 }
 
-private fun homeGreeting(hourOfDay: Int = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)): String = when (hourOfDay) {
+fun homeGreeting(hourOfDay: Int = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)): String = when (hourOfDay) {
     in 5..11 -> "上午好"
     in 12..17 -> "下午好"
     else -> "晚上好"
 }
 
-private fun homeActionHint(activeRun: RunResponse?, recentRun: RunResponse?): String = when {
+fun homeActionHint(activeRun: RunResponse?, recentRun: RunResponse?): String = when {
     activeRun != null -> "你有一项巡检正在进行，继续完成它吧"
     recentRun != null -> "上次巡检已完成，开始新的巡检吧"
     else -> "准备开始今天的巡检吧"
@@ -200,7 +200,7 @@ private fun DeviceSummaryCard(uiState: PsopDemoUiState, onClick: () -> Unit) {
 }
 
 @Composable
-private fun HomeShortcut(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, onClick: () -> Unit) {
+fun HomeShortcut(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, onClick: () -> Unit) {
     Surface(shape = RoundedCornerShape(24.dp), color = Color.White, modifier = modifier.clickable(onClick = onClick)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 22.dp)) {
             Icon(icon, null, tint = PsopBlue, modifier = Modifier.size(32.dp))
@@ -210,7 +210,7 @@ private fun HomeShortcut(label: String, icon: androidx.compose.ui.graphics.vecto
 }
 
 @Composable
-private fun HomeRecentRunCard(run: RunResponse, uiState: PsopDemoUiState, onResumeRun: (RunResponse) -> Unit) {
+fun HomeRecentRunCard(run: RunResponse, uiState: PsopDemoUiState, onResumeRun: (RunResponse) -> Unit) {
     Surface(shape = RoundedCornerShape(24.dp), color = Color.White, modifier = Modifier.fillMaxWidth().clickable { onResumeRun(run) }) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

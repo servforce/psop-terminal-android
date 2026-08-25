@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,8 +28,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardVoice
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -119,54 +126,71 @@ fun PsopMobileHomeScreen(
     onChangeMode: () -> Unit
 ) {
     val activeRun = uiState.homeResumeRun
-    val activeTaskName = activeRun?.let { run ->
-        uiState.skills.find { it.id == run.skillDefinitionId }?.name ?: "进行中的巡检任务"
-    } ?: "暂无进行中的任务"
-    val taskDescription = activeRun?.currentStep
-        ?.let { "当前步骤：$it" }
-        ?: if (activeRun == null) "请从任务列表选择任务开始执行" else "任务可继续执行"
+    val recentRun = uiState.homeRecentRun
+    val greeting = homeGreeting()
+    val actionHint = homeActionHint(activeRun, recentRun)
     Scaffold(
         containerColor = Color(0xFFF5F7FA),
         bottomBar = {
             NavigationBar(containerColor = Color.White) {
-                NavigationBarItem(selected = true, onClick = {}, icon = { Text("⌂") }, label = { Text("首页") })
-                NavigationBarItem(selected = false, onClick = onOpenSkills, icon = { Text("☑") }, label = { Text("任务") })
-                NavigationBarItem(selected = false, onClick = onOpenHistory, icon = { Text("◷") }, label = { Text("历史") })
+                NavigationBarItem(selected = true, onClick = {}, icon = { Icon(Icons.Default.Home, null) }, label = { Text("首页") })
+                NavigationBarItem(selected = false, onClick = onOpenSkills, icon = { Icon(Icons.Default.List, null) }, label = { Text("任务") })
+                NavigationBarItem(selected = false, onClick = onOpenHistory, icon = { Icon(Icons.Default.History, null) }, label = { Text("历史") })
+                NavigationBarItem(selected = false, onClick = {}, icon = { Icon(Icons.Default.Person, null) }, label = { Text("我的") })
             }
         }
     ) { padding ->
-        Column(
-            modifier = Modifier.padding(padding).padding(horizontal = 24.dp, vertical = 28.dp),
+        LazyColumn(
+            modifier = Modifier.padding(padding),
+            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("PSOP 智能巡检", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text("手机模式 · AI 视觉辅助", color = MobileBlue, fontSize = 13.sp)
-                }
-                Text("切换模式", color = MobileBlue, modifier = Modifier.clickable(onClick = onChangeMode))
-            }
-            Text("准备开始今天的任务", style = MaterialTheme.typography.headlineSmall)
-            Surface(shape = RoundedCornerShape(24.dp), color = Color.White, border = BorderStroke(1.dp, Color(0xFFE0E7F0))) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text(if (activeRun == null) "待开始任务" else "已暂存任务", color = MobileBlue, fontSize = 12.sp)
-                    Text(activeTaskName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(taskDescription, color = Color(0xFF6B7688))
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("PSOP 智能巡检", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    IconButton(onClick = onChangeMode) {
+                        Icon(Icons.Default.SwapHoriz, contentDescription = "切换模式", tint = Color(0xFF6B7688))
+                    }
                 }
             }
-            Button(
-                onClick = { activeRun?.let(onResumeRun) ?: onOpenSkills() },
-                modifier = Modifier.fillMaxWidth().height(58.dp),
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MobileBlue)
-            ) {
-                Text(if (activeRun == null) "查看任务" else "继续任务", fontSize = 17.sp)
+            item {
+                Text(greeting, color = Color(0xFF6B7688), style = MaterialTheme.typography.titleMedium)
+                Text(actionHint, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 4.dp))
+            }
+            item {
+                Button(
+                    onClick = { activeRun?.let(onResumeRun) ?: onOpenSkills() },
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MobileBlue)
+                ) {
+                    Icon(Icons.Default.PlayArrow, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (activeRun == null) "开始巡检" else "继续巡检", fontSize = 22.sp)
+                }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HomeShortcut("历史记录", Icons.Default.History, Modifier.weight(1f), onOpenHistory)
+                    HomeShortcut("巡检技能", Icons.Default.List, Modifier.weight(1f), onOpenSkills)
+                }
+            }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("最近巡检", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                    Text("查看全部", color = MobileBlue, modifier = Modifier.clickable(onClick = onOpenHistory))
+                }
+            }
+            if (recentRun != null) {
+                item { HomeRecentRunCard(recentRun, uiState, onResumeRun) }
+            } else if (!uiState.isLoadingHomeRuns) {
+                item { Text("暂无巡检记录", color = Color(0xFF6B7688), modifier = Modifier.padding(vertical = 16.dp)) }
             }
         }
     }
 }
 
-private enum class MobileArState { SCANNING, READY_TO_VERIFY, EXCEPTION, COMPLETE }
+private enum class MobileArState { SCANNING, READY }
 
 @Composable
 fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
@@ -183,7 +207,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
 
     LaunchedEffect(Unit) {
         delay(1200)
-        if (arState == MobileArState.SCANNING) arState = MobileArState.READY_TO_VERIFY
+        if (arState == MobileArState.SCANNING) arState = MobileArState.READY
     }
 
     BackHandler {
@@ -220,7 +244,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             Column {
                 Text(uiState.selectedSkill?.name ?: "当前巡检任务", color = Color.White, fontSize = 12.sp)
                 Text(
-                    if (arState == MobileArState.COMPLETE) "01 / 01 · 已通过" else "01 / 07 · 实时识别中",
+                    "01 / 07 · 实时识别中",
                     color = Color(0xFFD7E4FF),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
@@ -238,14 +262,6 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("AI 对话") }, onClick = { showMenu = false; showChat = true })
-                DropdownMenuItem(
-                    text = { Text(if (arState == MobileArState.EXCEPTION) "已重新压紧，开始复核" else "完成操作并复核") },
-                    onClick = { showMenu = false; arState = MobileArState.COMPLETE }
-                )
-                DropdownMenuItem(
-                    text = { Text("识别异常处理") },
-                    onClick = { showMenu = false; arState = MobileArState.EXCEPTION }
-                )
                 DropdownMenuItem(text = { Text("暂存并退出") }, onClick = { showMenu = false; viewModel.navigateBack() })
             }
         }
@@ -287,7 +303,6 @@ private fun MotherboardScene(state: MobileArState, modifier: Modifier = Modifier
         }
         listOf("A1", "A2", "B1", "B2").forEachIndexed { index, name ->
             val highlight = name == "A2" || name == "B2"
-            val exception = state == MobileArState.EXCEPTION && name == "B2"
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -296,17 +311,13 @@ private fun MotherboardScene(state: MobileArState, modifier: Modifier = Modifier
                     .background(Color(0xFF192632), RoundedCornerShape(5.dp))
                     .then(
                         if (highlight) Modifier.border(
-                            BorderStroke(2.dp, if (exception) Color(0xFFB7FFCE) else ArGreen),
+                            BorderStroke(2.dp, ArGreen),
                             RoundedCornerShape(5.dp)
                         ) else Modifier
                     )
             ) {
                 Text(
-                    text = when {
-                        exception -> "B2\n待处理"
-                        state == MobileArState.COMPLETE && highlight -> "$name\n通过"
-                        else -> name
-                    },
+                    text = name,
                     color = if (highlight) ArGreen else Color(0xFFD9E0E7),
                     fontSize = 11.sp,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
@@ -316,9 +327,7 @@ private fun MotherboardScene(state: MobileArState, modifier: Modifier = Modifier
         Text(
             text = when (state) {
                 MobileArState.SCANNING -> "正在识别目标槽位"
-                MobileArState.READY_TO_VERIFY -> "已识别 A2、B2 目标位置"
-                MobileArState.EXCEPTION -> "B2 卡扣状态待处理"
-                MobileArState.COMPLETE -> "AI 已确认当前步骤"
+                MobileArState.READY -> "已识别当前任务目标"
             },
             color = Color.White,
             fontSize = 12.sp,
