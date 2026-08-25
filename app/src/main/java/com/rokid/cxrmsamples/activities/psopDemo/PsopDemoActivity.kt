@@ -47,7 +47,9 @@ class PsopDemoActivity : ComponentActivity() {
                     PsopDemoScreen(
                         viewModel = viewModel,
                         onOpenDeviceConnection = {
-                            startActivity(Intent(this@PsopDemoActivity, BluetoothInitActivity::class.java))
+                            startActivity(Intent(this@PsopDemoActivity, BluetoothInitActivity::class.java).apply {
+                                putExtra(EXTRA_OPERATING_MODE, PsopOperatingMode.GLASSES.name)
+                            })
                         },
                         onOpenSdkDebug = {
                             startActivity(Intent(this@PsopDemoActivity, UsageSelectionActivity::class.java))

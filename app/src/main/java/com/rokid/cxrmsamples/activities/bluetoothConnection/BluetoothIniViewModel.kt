@@ -21,6 +21,7 @@ import com.rokid.cxr.client.extend.CxrApi
 import com.rokid.cxr.client.extend.callbacks.BluetoothStatusCallback
 import com.rokid.cxr.client.utils.ValueUtil
 import com.rokid.cxrmsamples.activities.psopDemo.PsopDemoActivity
+import com.rokid.cxrmsamples.activities.psopDemo.PsopOperatingMode
 import com.rokid.cxrmsamples.activities.usageSelection.UsageSelectionActivity
 import com.rokid.cxrmsamples.dataBeans.CONSTANT
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -445,7 +446,9 @@ class BluetoothIniViewModel : ViewModel() {
      * 直接跳转 PSOP 巡检（主流程）
      */
     fun toPsopDemo(context: Context) {
-        context.startActivity(Intent(context, PsopDemoActivity::class.java))
+        context.startActivity(Intent(context, PsopDemoActivity::class.java).apply {
+            putExtra(PsopDemoActivity.EXTRA_OPERATING_MODE, PsopOperatingMode.GLASSES.name)
+        })
     }
 
     /**
