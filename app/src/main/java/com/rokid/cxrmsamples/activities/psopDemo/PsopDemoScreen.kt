@@ -180,14 +180,30 @@ fun PsopDemoScreen(
 
     android.util.Log.d("PSOP_DEBUG", "PsopDemoScreen: currentScreen=${uiState.currentScreen}")
     when (uiState.currentScreen) {
-        InspectionScreen.HOME -> PsopHomeScreen(
-            uiState = uiState,
-            onOpenSkills = { viewModel.openSkillList() },
-            onOpenHistory = { viewModel.openHistory() },
-            onOpenDeviceConnection = onOpenDeviceConnection,
-            onOpenSdkDebug = onOpenSdkDebug,
-            onResumeRun = { viewModel.resumeInvocation(it) }
+        InspectionScreen.MODE_SELECTION -> PsopModeSelectionScreen(
+            onGlassesMode = { viewModel.selectOperatingMode(PsopOperatingMode.GLASSES) },
+            onMobileMode = { viewModel.selectOperatingMode(PsopOperatingMode.MOBILE) }
         )
+        InspectionScreen.HOME -> {
+            if (uiState.operatingMode == PsopOperatingMode.MOBILE) {
+                PsopMobileHomeScreen(
+                    uiState = uiState,
+                    onOpenSkills = { viewModel.openSkillList() },
+                    onOpenHistory = { viewModel.openHistory() },
+                    onResumeRun = { viewModel.resumeInvocation(it) },
+                    onChangeMode = { viewModel.openModeSelection() }
+                )
+            } else {
+                PsopHomeScreen(
+                    uiState = uiState,
+                    onOpenSkills = { viewModel.openSkillList() },
+                    onOpenHistory = { viewModel.openHistory() },
+                    onOpenDeviceConnection = onOpenDeviceConnection,
+                    onOpenSdkDebug = onOpenSdkDebug,
+                    onResumeRun = { viewModel.resumeInvocation(it) }
+                )
+            }
+        }
         InspectionScreen.SKILL_LIST -> SkillListScreen(
             skills = uiState.skills,
             isLoading = uiState.isLoadingSkills,
@@ -214,7 +230,13 @@ fun PsopDemoScreen(
             onRunClicked = { viewModel.resumeInvocation(it) },
             onBack = { viewModel.navigateBack() }
         )
-        InspectionScreen.INTERACTION -> InteractionScreen(viewModel = viewModel, uiState = uiState)
+        InspectionScreen.INTERACTION -> {
+            if (uiState.operatingMode == PsopOperatingMode.MOBILE) {
+                MobileArTaskScreen(viewModel = viewModel, uiState = uiState)
+            } else {
+                InteractionScreen(viewModel = viewModel, uiState = uiState)
+            }
+        }
     }
 }
 

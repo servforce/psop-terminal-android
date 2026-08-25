@@ -100,7 +100,14 @@ enum class GlassesDisplayMode {
     TELEPROMPTER
 }
 
+/** PSOP 任务工作方式：眼镜模式保留既有完整能力；手机模式不触发任何眼镜端调用。 */
+enum class PsopOperatingMode {
+    GLASSES,
+    MOBILE
+}
+
 enum class InspectionScreen {
+    MODE_SELECTION,
     HOME,
     SKILL_LIST,
     INVOCATION_LIST,
@@ -120,7 +127,8 @@ data class PsopDemoUiState(
     val runStatus: String? = null, // "running", "waiting_input", "succeeded", "failed", "cancelled", "aborted"
     val interactionMode: InteractionMode = InteractionMode.IDLE,
     val asrText: String = "",  // 当前 ASR 识别到的文字（实时显示用）
-    val currentScreen: InspectionScreen = InspectionScreen.HOME,
+    val currentScreen: InspectionScreen = InspectionScreen.MODE_SELECTION,
+    val operatingMode: PsopOperatingMode = PsopOperatingMode.GLASSES,
     val skills: List<SkillSummaryResponse> = emptyList(),
     val selectedSkill: SkillSummaryResponse? = null,
     val invocations: List<RunResponse> = emptyList(),
@@ -725,6 +733,21 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         loadRuns(skill.id)
     }
 
+    fun selectOperatingMode(mode: PsopOperatingMode) {
+        _uiState.update {
+            it.copy(
+                operatingMode = mode,
+                currentScreen = InspectionScreen.HOME,
+                error = null
+            )
+        }
+        loadHomeRuns()
+    }
+
+    fun openModeSelection() {
+        _uiState.update { it.copy(currentScreen = InspectionScreen.MODE_SELECTION, error = null) }
+    }
+
     fun openHome() {
         _uiState.update { it.copy(currentScreen = InspectionScreen.HOME, error = null) }
         loadHomeRuns()
@@ -870,6 +893,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     fun navigateBack() {
         val current = _uiState.value.currentScreen
         when (current) {
+            InspectionScreen.MODE_SELECTION -> Unit
             InspectionScreen.SKILL_LIST, InspectionScreen.HISTORY -> openHome()
             InspectionScreen.INVOCATION_LIST -> _uiState.update { it.copy(currentScreen = InspectionScreen.SKILL_LIST) }
             InspectionScreen.INTERACTION -> {
@@ -880,8 +904,10 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 if (returnToHistory) loadAllRuns() else _uiState.value.selectedSkill?.id?.let { loadRuns(it) }
                 // 清理本次会话中的本地图片缓存
                 cleanupPhotoCache()
-                // 拆除 P2P 预连接
-                teardownP2P()
+                // 手机模式没有创建眼镜端 P2P 连接，避免触碰眼镜端状态。
+                if (_uiState.value.operatingMode == PsopOperatingMode.GLASSES) {
+                    teardownP2P()
+                }
             }
             else -> {}
         }
@@ -1294,6 +1320,9 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
      * TTS 播报不受模式影响，仍由调用方按原逻辑入队。
      */
     private fun displayGlassesText(text: String) {
+        if (_uiState.value.operatingMode != PsopOperatingMode.GLASSES) {
+            return
+        }
         when (_uiState.value.glassesDisplayMode) {
             GlassesDisplayMode.CUSTOM_VIEW -> sendTextToTeleprompter(text)
             GlassesDisplayMode.TELEPROMPTER -> sendTextToWordTips(text)
@@ -1678,18 +1707,17 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     fun startSkill(skillKey: String? = null) {
         val key = skillKey ?: _uiState.value.selectedSkill?.key ?: return
         _uiState.update { it.copy(currentScreen = InspectionScreen.INTERACTION) }
-        // 重新注册 AI 事件监听器（上次巡检结束时会被置 null）
-        CxrApi.getInstance().setAiEventListener(aiEventListener)
-        // 重新注册媒体文件更新监听器
-        CxrApi.getInstance().setMediaFilesUpdateListener(mediaFilesUpdateListener)
-        // P2P 目标设备标识（幂等，失败仅日志；参考 mediaFile/arRecording 页的既有调用）
-        try {
-            P2PUtils.Instance.setToZuoyitong()
-        } catch (e: Exception) {
-            Log.w(TAG, "setToZuoyitong failed (ignored)", e)
+        if (_uiState.value.operatingMode == PsopOperatingMode.GLASSES) {
+            // 眼镜模式保持现有完整初始化流程。
+            CxrApi.getInstance().setAiEventListener(aiEventListener)
+            CxrApi.getInstance().setMediaFilesUpdateListener(mediaFilesUpdateListener)
+            try {
+                P2PUtils.Instance.setToZuoyitong()
+            } catch (e: Exception) {
+                Log.w(TAG, "setToZuoyitong failed (ignored)", e)
+            }
+            preConnectP2P()
         }
-        // 预建 P2P 连接（拍照时直接用，省去发现+连接耗时）
-        preConnectP2P()
         viewModelScope.launch {
             try {
                 _uiState.update {
@@ -1729,12 +1757,12 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         if (isActiveRun(invocation)) {
             rememberLastOpenedActiveRun(runId)
         }
-        // 重新注册 AI 事件监听器（上次巡检结束时会被置 null）
-        CxrApi.getInstance().setAiEventListener(aiEventListener)
-        // 重新注册媒体文件更新监听器
-        CxrApi.getInstance().setMediaFilesUpdateListener(mediaFilesUpdateListener)
-        // 预建 P2P 连接
-        preConnectP2P()
+        if (_uiState.value.operatingMode == PsopOperatingMode.GLASSES) {
+            // 仅眼镜模式恢复眼镜事件、媒体同步和 P2P 预连接。
+            CxrApi.getInstance().setAiEventListener(aiEventListener)
+            CxrApi.getInstance().setMediaFilesUpdateListener(mediaFilesUpdateListener)
+            preConnectP2P()
+        }
         _uiState.update {
             it.copy(
                 currentScreen = InspectionScreen.INTERACTION,
