@@ -89,6 +89,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import java.io.File
+import kotlinx.coroutines.delay
 
 private val MobileBlue = Color(0xFF2E66E9)
 
@@ -214,6 +215,8 @@ fun PsopMobileHomeScreen(
 fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var showMenu by remember { mutableStateOf(false) }
     var showChat by rememberSaveable { mutableStateOf(false) }
+    var isCaptureMode by rememberSaveable { mutableStateOf(false) }
+    var captureStatus by remember { mutableStateOf<String?>(null) }
     var captureFrame by remember { mutableStateOf<(() -> Bitmap?)?>(null) }
     val context = LocalContext.current
     var hasCameraPermission by remember {
@@ -248,6 +251,24 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         })
+    }
+
+    fun captureAndUpload() {
+        val bitmap = captureFrame?.invoke() ?: return
+        val photoDir = File(context.cacheDir, "psop_mobile_photos").apply { mkdirs() }
+        val photoFile = File.createTempFile("capture_", ".jpg", photoDir)
+        photoFile.outputStream().use { output ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
+        }
+        viewModel.uploadFile(photoFile)
+        captureStatus = "已拍摄，正在校验"
+    }
+
+    LaunchedEffect(captureStatus) {
+        if (captureStatus != null) {
+            delay(2400)
+            captureStatus = null
+        }
     }
 
     DisposableEffect(speechRecognizer) {
@@ -337,50 +358,67 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 DropdownMenuItem(text = { Text("AI 对话") }, onClick = { showMenu = false; showChat = true })
             }
         }
-        Surface(
-            shape = CircleShape,
-            color = if (isListening) Color.White else MobileBlue,
-            shadowElevation = 8.dp,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 34.dp).size(58.dp)
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            IconButton(
-                onClick = {
-                    when {
-                        isListening -> speechRecognizer?.stopListening()
-                        !hasMicrophonePermission -> {
-                            startVoiceAfterPermission = true
-                            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        }
-                        else -> startVoiceRecognition()
-                    }
+            captureStatus?.let { status ->
+                Surface(
+                    color = Color(0xD9162A44),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                ) {
+                    Text(status, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
                 }
+            }
+            Row(
+                modifier = Modifier.padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(28.dp)
             ) {
-                Icon(
-                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.KeyboardVoice,
-                    contentDescription = if (isListening) "停止语音" else "语音助手",
-                    tint = if (isListening) MobileBlue else Color.White
+                Text(
+                    "语音提问",
+                    color = if (!isCaptureMode) Color.White else Color(0xFFB8C4D6),
+                    fontSize = 13.sp,
+                    fontWeight = if (!isCaptureMode) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.clickable { isCaptureMode = false }
+                )
+                Text(
+                    "拍摄",
+                    color = if (isCaptureMode) Color.White else Color(0xFFB8C4D6),
+                    fontSize = 13.sp,
+                    fontWeight = if (isCaptureMode) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.clickable { isCaptureMode = true }
                 )
             }
-        }
-        if (hasCameraPermission) {
             Surface(
                 shape = CircleShape,
-                color = Color.White,
+                color = if (isCaptureMode) Color.White else if (isListening) Color.White else MobileBlue,
                 shadowElevation = 8.dp,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 34.dp).size(52.dp)
+                modifier = Modifier.size(62.dp)
             ) {
                 IconButton(
                     onClick = {
-                        val bitmap = captureFrame?.invoke() ?: return@IconButton
-                        val photoDir = File(context.cacheDir, "psop_mobile_photos").apply { mkdirs() }
-                        val photoFile = File.createTempFile("capture_", ".jpg", photoDir)
-                        photoFile.outputStream().use { output ->
-                            bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
+                        if (isCaptureMode) {
+                            if (hasCameraPermission) captureAndUpload() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        } else {
+                            when {
+                                isListening -> speechRecognizer?.stopListening()
+                                !hasMicrophonePermission -> {
+                                    startVoiceAfterPermission = true
+                                    microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                                else -> startVoiceRecognition()
+                            }
                         }
-                        viewModel.uploadFile(photoFile)
                     }
                 ) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = "拍摄并校验", tint = MobileBlue)
+                    Icon(
+                        imageVector = if (isCaptureMode) Icons.Default.CameraAlt else if (isListening) Icons.Default.Stop else Icons.Default.KeyboardVoice,
+                        contentDescription = if (isCaptureMode) "拍摄并校验" else if (isListening) "停止语音" else "语音助手",
+                        tint = if (isCaptureMode || isListening) MobileBlue else Color.White
+                    )
                 }
             }
         }
