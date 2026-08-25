@@ -93,6 +93,7 @@ import kotlinx.coroutines.delay
 
 private val MobileBlue = Color(0xFF2E66E9)
 private val MobileModeAccent = Color(0xFFFF6900)
+internal val MobileActiveRunStatuses = setOf("accepted", "running", "waiting_input")
 
 @Composable
 fun PsopModeSelectionScreen(
@@ -605,6 +606,7 @@ internal fun MobileTaskChatScreen(
     onSend: (String) -> Unit
 ) {
     var input by remember { mutableStateOf("") }
+    val isActiveMobileTask = uiState.runStatus in MobileActiveRunStatuses
     Scaffold(
         topBar = {
             TopAppBar(
@@ -638,7 +640,7 @@ internal fun MobileTaskChatScreen(
             ) {
                 item {
                     Text(
-                        if (uiState.isRunning) "当前处于 AR 任务中。描述问题后，返回 AR 继续实时识别。"
+                        if (isActiveMobileTask) "当前处于 AR 任务中。描述问题后，返回 AR 继续实时识别。"
                         else "当前未进入现场执行，可直接向 AI 提问。",
                         color = Color(0xFF60708A),
                         modifier = Modifier.padding(vertical = 12.dp)
