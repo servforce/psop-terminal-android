@@ -220,7 +220,7 @@ private fun MobileAnswerSpeaker(viewModel: PsopDemoViewModel) {
     }
 
     fun speak(text: String) {
-        textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, "psop-mobile-${System.nanoTime()}")
+        textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "psop-mobile-${System.nanoTime()}")
     }
 
     LaunchedEffect(viewModel) {
