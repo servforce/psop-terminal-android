@@ -601,19 +601,11 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp)
             )
         }
-        when {
-            isAwaitingAiReply -> {
-                ArAiReplyCard(
-                    text = "AI 正在分析现场信息…",
-                    modifier = Modifier.align(Alignment.TopCenter).padding(start = 20.dp, end = 20.dp, top = 28.dp)
-                )
-            }
-            arAiReply != null -> {
-                ArAiReplyCard(
-                    text = arAiReply!!,
-                    modifier = Modifier.align(Alignment.TopCenter).padding(start = 20.dp, end = 20.dp, top = 28.dp)
-                )
-            }
+        arAiReply?.let { reply ->
+            ArAiReplyCard(
+                text = reply,
+                modifier = Modifier.align(Alignment.TopCenter).padding(start = 20.dp, end = 20.dp, top = 28.dp)
+            )
         }
         if (showMenu) {
             Box(
