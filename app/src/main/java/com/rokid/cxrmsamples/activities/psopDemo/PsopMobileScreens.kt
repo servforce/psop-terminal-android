@@ -218,6 +218,9 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var showChat by rememberSaveable { mutableStateOf(false) }
     var isCaptureMode by rememberSaveable { mutableStateOf(false) }
     var captureStatus by remember { mutableStateOf<String?>(null) }
+    var isAwaitingAiReply by remember { mutableStateOf(false) }
+    var aiReplyBaselineCount by remember { mutableStateOf(0) }
+    var arAiReply by remember { mutableStateOf<String?>(null) }
     var captureFrame by remember { mutableStateOf<(() -> Bitmap?)?>(null) }
     val context = LocalContext.current
     var hasCameraPermission by remember {
@@ -244,7 +247,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
 
     fun startVoiceRecognition() {
         if (speechRecognizer == null) {
-            showChat = true
+            captureStatus = "语音识别暂不可用"
             return
         }
         isListening = true
@@ -261,6 +264,9 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         photoFile.outputStream().use { output ->
             bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
         }
+        arAiReply = null
+        isAwaitingAiReply = true
+        aiReplyBaselineCount = uiState.messages.size
         viewModel.uploadFile(photoFile)
         captureStatus = "已拍摄，正在校验"
     }
@@ -269,6 +275,27 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         if (captureStatus != null) {
             delay(2400)
             captureStatus = null
+        }
+    }
+
+    LaunchedEffect(uiState.messages, isAwaitingAiReply, aiReplyBaselineCount) {
+        if (!isAwaitingAiReply) return@LaunchedEffect
+        val nextReply = uiState.messages
+            .drop(aiReplyBaselineCount)
+            .asReversed()
+            .firstOrNull { message ->
+                message.direction == "output" && message.content.isNotBlank()
+            }
+            ?.content
+            ?.replace("[图片]", "")
+            ?.replace("[音频]", "")
+            ?.replace("[视频]", "")
+            ?.replace("[文件]", "")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+        if (nextReply != null) {
+            arAiReply = nextReply
+            isAwaitingAiReply = false
         }
     }
 
@@ -284,8 +311,10 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 isListening = false
                 val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
                 if (!text.isNullOrBlank()) {
+                    arAiReply = null
+                    isAwaitingAiReply = true
+                    aiReplyBaselineCount = uiState.messages.size
                     viewModel.submitInput(text)
-                    showChat = true
                 }
             }
             override fun onPartialResults(partialResults: Bundle?) = Unit
@@ -359,6 +388,20 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 DropdownMenuItem(text = { Text("AI 对话") }, onClick = { showMenu = false; showChat = true })
             }
         }
+        when {
+            isAwaitingAiReply -> {
+                ArAiReplyCard(
+                    text = "AI 正在分析现场信息…",
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 170.dp)
+                )
+            }
+            arAiReply != null -> {
+                ArAiReplyCard(
+                    text = arAiReply!!,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 170.dp)
+                )
+            }
+        }
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -422,6 +465,20 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ArAiReplyCard(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        color = Color(0xE9162A44),
+        shape = RoundedCornerShape(16.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text("AI 现场提示", color = MobileModeAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(text, color = Color.White, fontSize = 14.sp, maxLines = 4, modifier = Modifier.padding(top = 5.dp))
         }
     }
 }
