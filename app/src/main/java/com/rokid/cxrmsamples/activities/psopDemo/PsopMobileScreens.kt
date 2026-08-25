@@ -991,6 +991,7 @@ internal fun MobileTaskChatScreen(
     onSend: (String) -> Unit
 ) {
     var input by remember { mutableStateOf("") }
+    var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     val isActiveMobileTask = uiState.runStatus in MobileActiveRunStatuses
     Scaffold(
         topBar = {
@@ -1032,9 +1033,16 @@ internal fun MobileTaskChatScreen(
                     )
                 }
                 items(uiState.messages, key = { it.id }) { message ->
-                    MessageBubble(message = message)
+                    MessageBubble(
+                        message = message,
+                        onImageClick = { fullscreenImageUrl = it },
+                        enableOutputTextSelection = true
+                    )
                 }
             }
         }
+    }
+    fullscreenImageUrl?.let { imageUrl ->
+        FullScreenImageViewer(imageUrl = imageUrl, onDismiss = { fullscreenImageUrl = null })
     }
 }

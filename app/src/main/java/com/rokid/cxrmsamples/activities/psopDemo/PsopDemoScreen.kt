@@ -1057,7 +1057,8 @@ fun ThinkingIndicator() {
 fun MessageBubble(
     message: TerminalMessage,
     onImageClick: (String) -> Unit = {},
-    onVideoClick: (String) -> Unit = {}
+    onVideoClick: (String) -> Unit = {},
+    enableOutputTextSelection: Boolean = false
 ) {
     val isOutput = message.direction == "output"
     val textColor = if (isOutput) Color.Black else Color.White
@@ -1137,7 +1138,13 @@ fun MessageBubble(
                     }
                     if (displayContent.isNotEmpty()) {
                         if (isOutput) {
-                            Markdown(content = displayContent)
+                            if (enableOutputTextSelection) {
+                                SelectionContainer {
+                                    Markdown(content = displayContent)
+                                }
+                            } else {
+                                Markdown(content = displayContent)
+                            }
                         } else {
                             SelectionContainer {
                                 Text(
