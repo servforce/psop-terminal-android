@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Looper
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -45,10 +46,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -65,6 +63,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.Locale
 
 
 data class MessagePart(
@@ -165,9 +164,10 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     private val _uiState = MutableStateFlow(PsopDemoUiState())
     val uiState: StateFlow<PsopDemoUiState> = _uiState.asStateFlow()
 
-    // 手机模式的新 AI 回复由界面使用 Android TextToSpeech 播报，不经过眼镜端链路。
-    private val _mobileTtsTexts = MutableSharedFlow<String>(extraBufferCapacity = 8)
-    val mobileTtsTexts: SharedFlow<String> = _mobileTtsTexts.asSharedFlow()
+    // 手机模式的 AI 回复由 Android TextToSpeech 直接从手机扬声器播报。
+    private var phoneTextToSpeech: TextToSpeech? = null
+    private var isPhoneTtsReady = false
+    private var pendingPhoneTtsText: String? = null
 
     /** 本地已收到的最大 seq_no */
     private var lastSeqNo: Int = 0
@@ -942,6 +942,41 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     // ========== TTS 播报队列 ==========
+
+    /** 手机模式本地播报：不调用 CXR，也不会向眼镜发送任何文字。 */
+    private fun speakOnPhone(text: String) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            viewModelScope.launch(Dispatchers.Main) { speakOnPhone(text) }
+            return
+        }
+        val trimmedText = text.trim()
+        if (trimmedText.isBlank()) return
+        val existingTts = phoneTextToSpeech
+        if (existingTts == null) {
+            pendingPhoneTtsText = trimmedText
+            phoneTextToSpeech = TextToSpeech(getApplication<Application>()) { status ->
+                viewModelScope.launch(Dispatchers.Main) {
+                    isPhoneTtsReady = status == TextToSpeech.SUCCESS
+                    val readyTts = phoneTextToSpeech
+                    if (isPhoneTtsReady && readyTts != null) {
+                        readyTts.language = Locale.SIMPLIFIED_CHINESE
+                        pendingPhoneTtsText?.let { pending ->
+                            readyTts.speak(pending, TextToSpeech.QUEUE_FLUSH, null, "psop-phone-${System.nanoTime()}")
+                        }
+                        pendingPhoneTtsText = null
+                    } else {
+                        Log.w(TAG, "Phone TextToSpeech initialization failed: $status")
+                    }
+                }
+            }
+            return
+        }
+        if (!isPhoneTtsReady) {
+            pendingPhoneTtsText = trimmedText
+            return
+        }
+        existingTts.speak(trimmedText, TextToSpeech.QUEUE_FLUSH, null, "psop-phone-${System.nanoTime()}")
+    }
 
     /**
      * 将文本加入 TTS 队列，若当前空闲则立即播报，否则等待上一条播完后自动播报
@@ -2693,7 +2728,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                         delay(800L)
                         enqueueTtsForMessage(cleanedContent)
                     } else {
-                        _mobileTtsTexts.tryEmit(cleanedContent)
+                        speakOnPhone(cleanedContent)
                     }
                 }
                 // 图片 parts 与实时路径一致：仅 CustomView 模式发眼镜端轮播
@@ -3834,7 +3869,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                                         enqueueTtsForMessage(cleaned)
                                     }
                                 } else {
-                                    _mobileTtsTexts.tryEmit(cleaned)
+                                    speakOnPhone(cleaned)
                                 }
                             }
                             // 如果有图片 parts，同时发送图片到眼镜端轮播（仅 CustomView 模式：
@@ -4140,7 +4175,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                                     enqueueTtsForMessage(cleanedContent)
                                 }
                             } else {
-                                _mobileTtsTexts.tryEmit(cleanedContent)
+                                speakOnPhone(cleanedContent)
                             }
                         }
                         // 如果有图片 parts，同时发送图片到眼镜端轮播（仅 CustomView 模式：
@@ -4643,6 +4678,11 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         ttsRetryJob = null
         ttsPreemptFlagResetJob?.cancel()
         ttsPreemptFlagResetJob = null
+        phoneTextToSpeech?.stop()
+        phoneTextToSpeech?.shutdown()
+        phoneTextToSpeech = null
+        isPhoneTtsReady = false
+        pendingPhoneTtsText = null
         // 清理 P2P 同步资源
         isHwPhotoSyncing = false
         isHwPhotoRoundClaimed = false

@@ -17,7 +17,6 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
 import android.view.Surface
 import android.view.TextureView
 import androidx.activity.compose.BackHandler
@@ -89,8 +88,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.flow.collect
-import java.util.Locale
 import java.io.File
 
 private val MobileBlue = Color(0xFF2E66E9)
@@ -214,41 +211,7 @@ fun PsopMobileHomeScreen(
 }
 
 @Composable
-private fun MobileAnswerSpeaker(viewModel: PsopDemoViewModel) {
-    val context = LocalContext.current
-    var ttsReady by remember { mutableStateOf(false) }
-    var pendingText by remember { mutableStateOf<String?>(null) }
-    val textToSpeech = remember(context) {
-        TextToSpeech(context) { status -> ttsReady = status == TextToSpeech.SUCCESS }
-    }
-
-    fun speak(text: String) {
-        textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "psop-mobile-${System.nanoTime()}")
-    }
-
-    LaunchedEffect(viewModel) {
-        viewModel.mobileTtsTexts.collect { text ->
-            if (ttsReady) speak(text) else pendingText = text
-        }
-    }
-    LaunchedEffect(ttsReady) {
-        if (ttsReady) {
-            textToSpeech.language = Locale.SIMPLIFIED_CHINESE
-            pendingText?.let(::speak)
-            pendingText = null
-        }
-    }
-    DisposableEffect(textToSpeech) {
-        onDispose {
-            textToSpeech.stop()
-            textToSpeech.shutdown()
-        }
-    }
-}
-
-@Composable
 fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
-    MobileAnswerSpeaker(viewModel)
     var showMenu by remember { mutableStateOf(false) }
     var showChat by rememberSaveable { mutableStateOf(false) }
     var captureFrame by remember { mutableStateOf<(() -> Bitmap?)?>(null) }
