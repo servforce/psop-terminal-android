@@ -655,6 +655,22 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 }
             }
         }
+        captureStatus?.let { status ->
+            Surface(
+                color = Color(0xD9162A44),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 128.dp)
+            ) {
+                Text(
+                    status,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                )
+            }
+        }
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -663,15 +679,6 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 .padding(top = 14.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            captureStatus?.let { status ->
-                Surface(
-                    color = Color(0xD9162A44),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.padding(bottom = 12.dp)
-                ) {
-                    Text(status, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
-                }
-            }
             Row(
                 modifier = Modifier.offset(x = selectedModeOffset).padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(26.dp)
