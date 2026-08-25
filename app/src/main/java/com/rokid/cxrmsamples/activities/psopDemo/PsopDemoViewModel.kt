@@ -968,11 +968,19 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                                 .build()
                         )
                         readyTts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                            override fun onStart(utteranceId: String) = Log.d(TAG, "Phone TTS started: $utteranceId")
-                            override fun onDone(utteranceId: String) = Log.d(TAG, "Phone TTS completed: $utteranceId")
+                            override fun onStart(utteranceId: String) {
+                                Log.d(TAG, "Phone TTS started: $utteranceId")
+                            }
+                            override fun onDone(utteranceId: String) {
+                                Log.d(TAG, "Phone TTS completed: $utteranceId")
+                            }
                             @Deprecated("Deprecated in Java")
-                            override fun onError(utteranceId: String) = Log.w(TAG, "Phone TTS failed: $utteranceId")
-                            override fun onError(utteranceId: String, errorCode: Int) = Log.w(TAG, "Phone TTS failed: $utteranceId, code=$errorCode")
+                            override fun onError(utteranceId: String) {
+                                Log.w(TAG, "Phone TTS failed: $utteranceId")
+                            }
+                            override fun onError(utteranceId: String, errorCode: Int) {
+                                Log.w(TAG, "Phone TTS failed: $utteranceId, code=$errorCode")
+                            }
                         })
                         val languageStatus = readyTts.setLanguage(Locale.SIMPLIFIED_CHINESE)
                         if (languageStatus == TextToSpeech.LANG_MISSING_DATA || languageStatus == TextToSpeech.LANG_NOT_SUPPORTED) {
