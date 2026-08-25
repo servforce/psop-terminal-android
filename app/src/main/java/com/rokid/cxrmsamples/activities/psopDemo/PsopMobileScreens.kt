@@ -36,6 +36,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -101,6 +102,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -380,6 +382,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var showMenu by remember { mutableStateOf(false) }
     var showChat by rememberSaveable { mutableStateOf(false) }
     var isCaptureMode by rememberSaveable { mutableStateOf(false) }
+    var modeSwipeDistance by remember { mutableFloatStateOf(0f) }
     val selectedModeOffset by animateDpAsState(
         targetValue = when {
             showMenu -> (-52).dp
@@ -399,6 +402,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var showCaptureFeedback by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val hapticView = LocalView.current
+    val modeSwipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
     val shutterSound = remember { MediaActionSound() }
     var hasCameraPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -570,6 +574,19 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     val currentRequestMicrophonePermission by rememberUpdatedState(newValue = {
         microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     })
+    fun selectControlMode(index: Int) {
+        when (index) {
+            0 -> {
+                isCaptureMode = true
+                showMenu = false
+            }
+            1 -> {
+                isCaptureMode = false
+                showMenu = false
+            }
+            else -> showMenu = true
+        }
+    }
 
     BackHandler {
         if (showChat) showChat = false else viewModel.navigateBack()
@@ -680,7 +697,32 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(
-                modifier = Modifier.offset(x = selectedModeOffset).padding(bottom = 12.dp),
+                modifier = Modifier
+                    .offset(x = selectedModeOffset)
+                    .padding(bottom = 12.dp)
+                    .pointerInput(isCaptureMode, showMenu) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { modeSwipeDistance = 0f },
+                            onHorizontalDrag = { _, dragAmount ->
+                                modeSwipeDistance += dragAmount
+                            },
+                            onDragEnd = {
+                                val currentIndex = when {
+                                    showMenu -> 2
+                                    isCaptureMode -> 0
+                                    else -> 1
+                                }
+                                when {
+                                    modeSwipeDistance <= -modeSwipeThresholdPx ->
+                                        selectControlMode((currentIndex + 1).coerceAtMost(2))
+                                    modeSwipeDistance >= modeSwipeThresholdPx ->
+                                        selectControlMode((currentIndex - 1).coerceAtLeast(0))
+                                }
+                                modeSwipeDistance = 0f
+                            },
+                            onDragCancel = { modeSwipeDistance = 0f }
+                        )
+                    },
                 horizontalArrangement = Arrangement.spacedBy(26.dp)
             ) {
                 Text(
@@ -691,7 +733,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     modifier = Modifier.clickable(
                         interactionSource = captureModeInteraction,
                         indication = null
-                    ) { isCaptureMode = true; showMenu = false }
+                    ) { selectControlMode(0) }
                 )
                 Text(
                     "语音",
@@ -701,7 +743,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     modifier = Modifier.clickable(
                         interactionSource = voiceModeInteraction,
                         indication = null
-                    ) { isCaptureMode = false; showMenu = false }
+                    ) { selectControlMode(1) }
                 )
                 Text(
                     "更多",
@@ -711,7 +753,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     modifier = Modifier.clickable(
                         interactionSource = moreModeInteraction,
                         indication = null
-                    ) { showMenu = !showMenu }
+                    ) { if (showMenu) selectControlMode(1) else selectControlMode(2) }
                 )
             }
             Surface(
