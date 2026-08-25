@@ -181,7 +181,7 @@ fun PsopDemoScreen(
     android.util.Log.d("PSOP_DEBUG", "PsopDemoScreen: currentScreen=${uiState.currentScreen}")
     when (uiState.currentScreen) {
         InspectionScreen.MODE_SELECTION -> PsopModeSelectionScreen(
-            onGlassesMode = { viewModel.selectOperatingMode(PsopOperatingMode.GLASSES) },
+            onGlassesMode = onOpenDeviceConnection,
             onMobileMode = { viewModel.selectOperatingMode(PsopOperatingMode.MOBILE) }
         )
         InspectionScreen.HOME -> {
