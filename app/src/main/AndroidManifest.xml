@@ -129,16 +129,20 @@
             android:label="@string/title_activity_bluetooth_init"
             android:theme="@style/Theme.CXRMSamples" />
         <activity
-            android:name=".activities.main.MainActivity"
+            android:name=".activities.psopDemo.PsopModeSelectionActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.CXRMSamples">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".activities.main.MainActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.CXRMSamples" />
     </application>
 
 </manifest>

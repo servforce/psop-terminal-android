@@ -4,6 +4,7 @@ package com.rokid.cxrmsamples.activities.bluetoothConnection
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -47,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rokid.cxrmsamples.R
+import com.rokid.cxrmsamples.activities.psopDemo.PsopDemoActivity
+import com.rokid.cxrmsamples.activities.psopDemo.PsopOperatingMode
 import com.rokid.cxrmsamples.ui.theme.PsopTheme
 
 class BluetoothInitActivity : ComponentActivity() {
@@ -78,7 +81,9 @@ class BluetoothInitActivity : ComponentActivity() {
                 }, onConnected = {
                     viewModel.record(this)
                 }, onStartInspection = {
-                    viewModel.toPsopDemo(this)
+                    startActivity(Intent(this, PsopDemoActivity::class.java).apply {
+                        putExtra(PsopDemoActivity.EXTRA_OPERATING_MODE, PsopOperatingMode.GLASSES.name)
+                    })
                 }, onBack = {
                     finish()
                 })
