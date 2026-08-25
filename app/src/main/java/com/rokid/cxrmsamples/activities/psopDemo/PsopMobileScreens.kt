@@ -93,6 +93,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -579,7 +580,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         if (hasCameraPermission) {
             MobileCameraPreview(
                 onCaptureFrameAvailable = { captureFrame = it },
-                modifier = Modifier.fillMaxSize()
+                modifier = if (showMenu) Modifier.fillMaxSize().blur(12.dp) else Modifier.fillMaxSize()
             )
         } else {
             CameraPermissionContent(onRequestPermission = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) })
@@ -614,6 +615,44 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 )
             }
         }
+        if (showMenu) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.42f))
+                    .clickable { showMenu = false }
+            )
+            Surface(
+                color = Color(0xF2172A44),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, Color(0xFF37526F)),
+                shadowElevation = 10.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 126.dp)
+                    .clickable { showMenu = false; showChat = true }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(MobileBlue.copy(alpha = 0.26f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF9EC1FF), modifier = Modifier.size(17.dp))
+                    }
+                    Column {
+                        Text("AI 对话", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("描述现场问题，获取操作建议", color = Color(0xFFAFC2D9), fontSize = 11.sp)
+                    }
+                }
+            }
+        }
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -631,46 +670,15 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     Text(status, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
                 }
             }
-            if (showMenu) {
-                Surface(
-                    color = Color(0xE8172A44),
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, Color(0xFF37526F)),
-                    shadowElevation = 10.dp,
-                    modifier = Modifier
-                        .padding(bottom = 14.dp)
-                        .clickable { showMenu = false; showChat = true }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(MobileBlue.copy(alpha = 0.26f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF9EC1FF), modifier = Modifier.size(17.dp))
-                        }
-                        Column {
-                            Text("AI 对话", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("描述现场问题，获取操作建议", color = Color(0xFFAFC2D9), fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
             Row(
                 modifier = Modifier.padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(26.dp)
             ) {
                 Text(
                     "语音提问",
-                    color = if (!isCaptureMode) MobileModeAccent else Color(0xFFB8C4D6),
+                    color = if (!isCaptureMode && !showMenu) MobileModeAccent else Color(0xFFB8C4D6),
                     fontSize = 13.sp,
-                    fontWeight = if (!isCaptureMode) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (!isCaptureMode && !showMenu) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.clickable(
                         interactionSource = voiceModeInteraction,
                         indication = null
@@ -678,9 +686,9 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 )
                 Text(
                     "拍摄",
-                    color = if (isCaptureMode) MobileModeAccent else Color(0xFFB8C4D6),
+                    color = if (isCaptureMode && !showMenu) MobileModeAccent else Color(0xFFB8C4D6),
                     fontSize = 13.sp,
-                    fontWeight = if (isCaptureMode) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (isCaptureMode && !showMenu) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.clickable(
                         interactionSource = captureModeInteraction,
                         indication = null
