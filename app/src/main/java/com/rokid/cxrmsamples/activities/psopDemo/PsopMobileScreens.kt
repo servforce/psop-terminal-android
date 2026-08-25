@@ -116,6 +116,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 private val MobileBlue = Color(0xFF2E66E9)
@@ -135,6 +137,7 @@ private class MobileOfflineAsrRecorder(context: Context) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val outputLock = Any()
+    private val recognitionMutex = Mutex()
     private var output = ByteArrayOutputStream()
     private var audioRecord: AudioRecord? = null
     private var captureJob: Job? = null
@@ -214,14 +217,23 @@ private class MobileOfflineAsrRecorder(context: Context) {
         if (pcm.size < MOBILE_ASR_SAMPLE_RATE) {
             return@withContext MobileAsrResult(error = "说话时间太短，请按住再说一次")
         }
-        if (!SherpaAsrEngine.initialize(appContext)) {
-            return@withContext MobileAsrResult(error = "离线语音模型初始化失败")
-        }
-        val text = SherpaAsrEngine.recognize(pcm).trim()
+        val text = recognitionMutex.withLock {
+            if (!SherpaAsrEngine.initialize(appContext)) return@withLock null
+            SherpaAsrEngine.recognize(pcm).trim()
+        } ?: return@withContext MobileAsrResult(error = "离线语音模型初始化失败")
         if (text.isBlank()) {
             MobileAsrResult(error = "没有识别到有效语音，请再试一次")
         } else {
             MobileAsrResult(text = text)
+        }
+    }
+
+    suspend fun recognizeCurrentAudio(): String? = withContext(Dispatchers.IO) {
+        val pcm = synchronized(outputLock) { output.toByteArray() }
+        if (pcm.size < MOBILE_ASR_SAMPLE_RATE) return@withContext null
+        recognitionMutex.withLock {
+            if (!SherpaAsrEngine.initialize(appContext)) return@withLock null
+            SherpaAsrEngine.recognize(pcm).trim().takeIf { it.isNotBlank() }
         }
     }
 
@@ -393,9 +405,12 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var isListening by rememberSaveable { mutableStateOf(false) }
     var isRecognizingVoice by rememberSaveable { mutableStateOf(false) }
     var isVoiceCancelArmed by rememberSaveable { mutableStateOf(false) }
+    var liveVoiceText by remember { mutableStateOf("") }
+    var showVoiceTranscript by remember { mutableStateOf(false) }
     var voiceTouchStartY by remember { mutableFloatStateOf(0f) }
     val coroutineScope = rememberCoroutineScope()
     val offlineAsrRecorder = remember(context) { MobileOfflineAsrRecorder(context) }
+    var partialAsrJob by remember { mutableStateOf<Job?>(null) }
     val microphonePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasMicrophonePermission = granted
         if (!granted) captureStatus = "需要麦克风权限才能语音提问"
@@ -408,8 +423,20 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         } else {
             isListening = true
             isVoiceCancelArmed = false
+            liveVoiceText = ""
+            showVoiceTranscript = true
             captureStatus = "正在聆听 · 松开发送"
             hapticView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            partialAsrJob?.cancel()
+            partialAsrJob = coroutineScope.launch {
+                delay(800)
+                while (isListening) {
+                    offlineAsrRecorder.recognizeCurrentAudio()?.let { partial ->
+                        liveVoiceText = partial
+                    }
+                    delay(800)
+                }
+            }
         }
     }
 
@@ -420,10 +447,18 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         isRecognizingVoice = true
         captureStatus = "语音已提交"
         hapticView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        partialAsrJob?.cancel()
+        partialAsrJob = null
+        coroutineScope.launch {
+            delay(2_000)
+            showVoiceTranscript = false
+            liveVoiceText = ""
+        }
         coroutineScope.launch {
             val result = offlineAsrRecorder.stopAndRecognize()
             isRecognizingVoice = false
             result.text?.let { text ->
+                liveVoiceText = text
                 arAiReply = null
                 isAwaitingAiReply = true
                 aiReplyBaselineCount = uiState.messages.size
@@ -440,6 +475,10 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         offlineAsrRecorder.cancelRecording()
         isListening = false
         isVoiceCancelArmed = false
+        partialAsrJob?.cancel()
+        partialAsrJob = null
+        showVoiceTranscript = false
+        liveVoiceText = ""
         captureStatus = "已取消语音输入"
     }
 
@@ -552,6 +591,14 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     .background(Color.White.copy(alpha = 0.10f))
             )
             CaptureFeedbackCorners(modifier = Modifier.fillMaxSize().padding(38.dp))
+        }
+        if (showVoiceTranscript) {
+            LiveVoiceTranscriptCard(
+                text = liveVoiceText.ifBlank {
+                    if (isListening) "正在聆听…" else "正在识别语音…"
+                },
+                modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp)
+            )
         }
         when {
             isAwaitingAiReply -> {
@@ -733,6 +780,26 @@ private fun ArAiReplyCard(text: String, modifier: Modifier = Modifier) {
         ) {
             Text("AI 现场提示", color = ArOverlayGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Text(text, color = ArOverlayGreen, fontSize = 14.sp, modifier = Modifier.padding(top = 5.dp))
+        }
+    }
+}
+
+@Composable
+private fun LiveVoiceTranscriptCard(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        color = Color(0xD9162A44),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, ArOverlayGreen),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+            Text("语音输入", color = ArOverlayGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = text,
+                color = ArOverlayGreen,
+                fontSize = 18.sp,
+                modifier = Modifier.padding(top = 6.dp)
+            )
         }
     }
 }
