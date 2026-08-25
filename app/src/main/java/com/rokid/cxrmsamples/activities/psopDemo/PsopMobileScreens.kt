@@ -1060,8 +1060,17 @@ internal fun MobileTaskChatScreen(
                 modifier = Modifier.fillMaxWidth().padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(value = input, onValueChange = { input = it }, modifier = Modifier.weight(1f), placeholder = { Text("输入问题") })
-                IconButton(onClick = { if (input.isNotBlank()) { onSend(input); input = "" } }) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(if (isActiveMobileTask) "输入问题" else "任务已结束，仅可查看记录") },
+                    enabled = isActiveMobileTask
+                )
+                IconButton(
+                    onClick = { if (input.isNotBlank()) { onSend(input); input = "" } },
+                    enabled = isActiveMobileTask && input.isNotBlank()
+                ) {
                     Icon(Icons.Default.Send, contentDescription = "发送", tint = MobileBlue)
                 }
             }
@@ -1078,7 +1087,7 @@ internal fun MobileTaskChatScreen(
                 item {
                     Text(
                         if (isActiveMobileTask) "当前处于 AR 任务中。描述问题后，返回 AR 继续实时识别。"
-                        else "当前未进入现场执行，可直接向 AI 提问。",
+                        else "该任务已结束，仅可查看历史记录。",
                         color = Color(0xFF60708A),
                         modifier = Modifier.padding(vertical = 12.dp)
                     )
