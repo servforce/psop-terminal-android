@@ -16,6 +16,7 @@ import android.media.MediaRecorder
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.Surface
 import android.view.TextureView
@@ -29,6 +30,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -93,9 +95,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -368,7 +373,10 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     val captureModeInteraction = remember { MutableInteractionSource() }
     val moreModeInteraction = remember { MutableInteractionSource() }
     var captureFrame by remember { mutableStateOf<(() -> Bitmap?)?>(null) }
+    var capturedPreview by remember { mutableStateOf<Bitmap?>(null) }
+    var showCaptureFeedback by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val hapticView = LocalView.current
     var hasCameraPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
@@ -400,6 +408,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             isListening = true
             isVoiceCancelArmed = false
             captureStatus = "正在聆听 · 松开发送"
+            hapticView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         }
     }
 
@@ -408,7 +417,8 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         isListening = false
         isVoiceCancelArmed = false
         isRecognizingVoice = true
-        captureStatus = null
+        captureStatus = "语音已提交"
+        hapticView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
         coroutineScope.launch {
             val result = offlineAsrRecorder.stopAndRecognize()
             isRecognizingVoice = false
@@ -440,6 +450,8 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
         }
         arAiReply = null
+        capturedPreview = bitmap
+        showCaptureFeedback = true
         isAwaitingAiReply = true
         aiReplyBaselineCount = uiState.messages.size
         viewModel.uploadFile(photoFile)
@@ -450,6 +462,13 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         if (captureStatus != null && !isRecognizingVoice && !isListening) {
             delay(2400)
             captureStatus = null
+        }
+    }
+
+    LaunchedEffect(showCaptureFeedback) {
+        if (showCaptureFeedback) {
+            delay(1100)
+            showCaptureFeedback = false
         }
     }
 
@@ -471,6 +490,13 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         if (nextReply != null) {
             arAiReply = nextReply
             isAwaitingAiReply = false
+        }
+    }
+
+    LaunchedEffect(uiState.phoneTtsCompletionSequence) {
+        if (uiState.phoneTtsCompletionSequence > 0 && arAiReply != null) {
+            delay(10_000)
+            arAiReply = null
         }
     }
 
@@ -516,6 +542,38 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             )
         } else {
             CameraPermissionContent(onRequestPermission = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) })
+        }
+        if (showCaptureFeedback) {
+            capturedPreview?.let { bitmap ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = 0.16f))
+                )
+                Surface(
+                    color = Color(0xEA172A44),
+                    shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(1.dp, Color(0xFF5B7594)),
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "刚拍摄的现场画面",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(58.dp).clip(RoundedCornerShape(10.dp))
+                        )
+                        Column {
+                            Text("已完成拍摄", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Text("现场画面正在发送给 AI 校验", color = Color(0xFFAFC2D9), fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
         }
         when {
             isAwaitingAiReply -> {

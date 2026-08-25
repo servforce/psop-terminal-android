@@ -150,6 +150,8 @@ data class PsopDemoUiState(
     val runListScope: RunListScope = RunListScope.SKILL,
     val taskStatus: TaskStatusResponse? = null,  // 任务进度状态
     val isTtsPlaying: Boolean = false,  // 眼镜端 TTS 是否正在播报（用于显示"停止播报"按钮）
+    /** 手机端离线播报的完成序号，仅供手机 AR 提示卡在播报结束后自动收起。 */
+    val phoneTtsCompletionSequence: Long = 0L,
     // ===== 眼镜端长文本轮播控制状态（供手机端翻页/暂停按钮显隐与页码显示） =====
     val carouselIndex: Int = 0,          // 当前轮播段索引（0 起）
     val carouselTotalCount: Int = 0,     // 轮播总段数（<=1 表示无多段轮播，控制区隐藏）
@@ -943,9 +945,13 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
 
     /** 手机模式本地播报：不调用 CXR，也不会向眼镜发送任何文字。 */
     private fun speakOnPhone(text: String) {
-        val tts = phoneOfflineTts ?: OfflinePhoneTts(getApplication<Application>()).also {
-            phoneOfflineTts = it
-        }
+        val tts = phoneOfflineTts ?: OfflinePhoneTts(getApplication<Application>()) {
+            viewModelScope.launch(Dispatchers.Main) {
+                _uiState.update { state ->
+                    state.copy(phoneTtsCompletionSequence = state.phoneTtsCompletionSequence + 1)
+                }
+            }
+        }.also { phoneOfflineTts = it }
         tts.speak(text)
     }
 

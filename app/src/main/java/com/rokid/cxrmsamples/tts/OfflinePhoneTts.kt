@@ -29,7 +29,10 @@ import kotlinx.coroutines.launch
  * 模型随 APK 放在 assets，首次使用时复制到应用私有目录，再由 Sherpa ONNX 合成 PCM，
  * 通过手机扬声器播放。它不依赖 Android 系统 TextToSpeech，也不会向眼镜端发任何音频。
  */
-class OfflinePhoneTts(context: Context) {
+class OfflinePhoneTts(
+    context: Context,
+    private val onPlaybackCompleted: () -> Unit = {}
+) {
     private val appContext = context.applicationContext
     private val dispatcher = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "psop-offline-tts").apply { isDaemon = true }
@@ -57,6 +60,7 @@ class OfflinePhoneTts(context: Context) {
                 val audio = tts.generate(text = content, sid = SPEAKER_ID, speed = SPEECH_SPEED)
                 if (!isActive || audio.samples.isEmpty()) return@launch
                 play(audio.samples, audio.sampleRate)
+                if (isActive) onPlaybackCompleted()
             } catch (error: Exception) {
                 Log.e(TAG, "Offline phone TTS generation failed", error)
             }
