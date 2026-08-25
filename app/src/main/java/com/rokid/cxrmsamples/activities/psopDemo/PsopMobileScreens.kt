@@ -1,7 +1,6 @@
 package com.rokid.cxrmsamples.activities.psopDemo
 
 import android.Manifest
-import android.content.Intent
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -11,12 +10,12 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CaptureRequest
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.os.Handler
 import android.os.HandlerThread
-import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
+import android.util.Log
 import android.view.Surface
 import android.view.TextureView
 import androidx.activity.compose.BackHandler
@@ -77,6 +76,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,14 +89,137 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import com.rokid.cxrmsamples.asr.SherpaAsrEngine
+import java.io.ByteArrayOutputStream
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val MobileBlue = Color(0xFF2E66E9)
 private val MobileModeAccent = Color(0xFFFF6900)
 private val ArOverlayGreen = Color(0xFF00E676)
 private val ArOverlayGreenSoft = Color(0xFFD6FFE1)
 internal val MobileActiveRunStatuses = setOf("accepted", "running", "waiting_input")
+
+private const val MOBILE_ASR_SAMPLE_RATE = 16_000
+
+private data class MobileAsrResult(val text: String? = null, val error: String? = null)
+
+/**
+ * 手机端独立录音入口。只采集手机麦克风的 16kHz PCM，识别仍使用项目已有的
+ * Sherpa 离线模型，不接入系统 SpeechRecognizer，也不影响眼镜音频流。
+ */
+private class MobileOfflineAsrRecorder(context: Context) {
+    private val appContext = context.applicationContext
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val outputLock = Any()
+    private var output = ByteArrayOutputStream()
+    private var audioRecord: AudioRecord? = null
+    private var captureJob: Job? = null
+
+    @Volatile
+    private var isCapturing = false
+
+    @Suppress("MissingPermission")
+    fun start(): String? {
+        if (isCapturing) return null
+        val minBufferSize = AudioRecord.getMinBufferSize(
+            MOBILE_ASR_SAMPLE_RATE,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
+        if (minBufferSize <= 0) return "当前设备无法打开麦克风"
+
+        val bufferSize = maxOf(minBufferSize, 4096)
+        val recorder = try {
+            AudioRecord(
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                MOBILE_ASR_SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                bufferSize
+            )
+        } catch (error: Exception) {
+            Log.w("PsopMobileAsr", "Unable to create AudioRecord", error)
+            return "无法启动手机录音"
+        }
+        if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+            recorder.release()
+            return "当前设备无法初始化麦克风"
+        }
+
+        synchronized(outputLock) { output = ByteArrayOutputStream() }
+        audioRecord = recorder
+        return try {
+            recorder.startRecording()
+            if (recorder.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                recorder.release()
+                audioRecord = null
+                "手机录音未能启动"
+            } else {
+                isCapturing = true
+                captureJob = scope.launch {
+                    val buffer = ByteArray(bufferSize)
+                    while (isCapturing) {
+                        val size = recorder.read(buffer, 0, buffer.size)
+                        if (size > 0) {
+                            synchronized(outputLock) { output.write(buffer, 0, size) }
+                        } else if (size != AudioRecord.ERROR_INVALID_OPERATION && size != AudioRecord.ERROR_BAD_VALUE) {
+                            Log.w("PsopMobileAsr", "AudioRecord read failed: $size")
+                        }
+                    }
+                }
+                null
+            }
+        } catch (error: Exception) {
+            Log.w("PsopMobileAsr", "Unable to start AudioRecord", error)
+            recorder.release()
+            audioRecord = null
+            "无法启动手机录音"
+        }
+    }
+
+    suspend fun stopAndRecognize(): MobileAsrResult = withContext(Dispatchers.IO) {
+        isCapturing = false
+        val recorder = audioRecord
+        runCatching { recorder?.stop() }
+        captureJob?.join()
+        captureJob = null
+        if (audioRecord === recorder) audioRecord = null
+        runCatching { recorder?.release() }
+
+        val pcm = synchronized(outputLock) { output.toByteArray() }
+        if (pcm.size < MOBILE_ASR_SAMPLE_RATE) {
+            return@withContext MobileAsrResult(error = "说话时间太短，请按住再说一次")
+        }
+        if (!SherpaAsrEngine.initialize(appContext)) {
+            return@withContext MobileAsrResult(error = "离线语音模型初始化失败")
+        }
+        val text = SherpaAsrEngine.recognize(pcm).trim()
+        if (text.isBlank()) {
+            MobileAsrResult(error = "没有识别到有效语音，请再试一次")
+        } else {
+            MobileAsrResult(text = text)
+        }
+    }
+
+    fun release() {
+        isCapturing = false
+        val recorder = audioRecord
+        audioRecord = null
+        runCatching { recorder?.stop() }
+        runCatching { recorder?.release() }
+        captureJob?.cancel()
+        captureJob = null
+        scope.cancel()
+    }
+}
 
 @Composable
 fun PsopModeSelectionScreen(
@@ -242,25 +365,42 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
     }
     var isListening by rememberSaveable { mutableStateOf(false) }
+    var isRecognizingVoice by rememberSaveable { mutableStateOf(false) }
     var startVoiceAfterPermission by rememberSaveable { mutableStateOf(false) }
-    val speechRecognizer = remember(context) {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
-    }
+    val coroutineScope = rememberCoroutineScope()
+    val offlineAsrRecorder = remember(context) { MobileOfflineAsrRecorder(context) }
     val microphonePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasMicrophonePermission = granted
         startVoiceAfterPermission = granted
     }
 
     fun startVoiceRecognition() {
-        if (speechRecognizer == null) {
-            captureStatus = "语音识别暂不可用"
-            return
+        val error = offlineAsrRecorder.start()
+        if (error != null) {
+            captureStatus = error
+        } else {
+            isListening = true
         }
-        isListening = true
-        speechRecognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-        })
+    }
+
+    fun stopVoiceRecognition() {
+        if (!isListening) return
+        isListening = false
+        isRecognizingVoice = true
+        captureStatus = "正在离线识别…"
+        coroutineScope.launch {
+            val result = offlineAsrRecorder.stopAndRecognize()
+            isRecognizingVoice = false
+            result.text?.let { text ->
+                arAiReply = null
+                isAwaitingAiReply = true
+                aiReplyBaselineCount = uiState.messages.size
+                viewModel.submitInput(text)
+                captureStatus = null
+            } ?: run {
+                captureStatus = result.error ?: "语音识别失败，请再试一次"
+            }
+        }
     }
 
     fun captureAndUpload() {
@@ -278,7 +418,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     }
 
     LaunchedEffect(captureStatus) {
-        if (captureStatus != null) {
+        if (captureStatus != null && !isRecognizingVoice) {
             delay(2400)
             captureStatus = null
         }
@@ -305,29 +445,9 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         }
     }
 
-    DisposableEffect(speechRecognizer) {
-        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) = Unit
-            override fun onBeginningOfSpeech() = Unit
-            override fun onRmsChanged(rmsdB: Float) = Unit
-            override fun onBufferReceived(buffer: ByteArray?) = Unit
-            override fun onEndOfSpeech() = Unit
-            override fun onError(error: Int) { isListening = false }
-            override fun onResults(results: Bundle?) {
-                isListening = false
-                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (!text.isNullOrBlank()) {
-                    arAiReply = null
-                    isAwaitingAiReply = true
-                    aiReplyBaselineCount = uiState.messages.size
-                    viewModel.submitInput(text)
-                }
-            }
-            override fun onPartialResults(partialResults: Bundle?) = Unit
-            override fun onEvent(eventType: Int, params: Bundle?) = Unit
-        })
+    DisposableEffect(offlineAsrRecorder) {
         onDispose {
-            speechRecognizer?.destroy()
+            offlineAsrRecorder.release()
         }
     }
 
@@ -460,7 +580,8 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                             if (hasCameraPermission) captureAndUpload() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                         } else {
                             when {
-                                isListening -> speechRecognizer?.stopListening()
+                                isListening -> stopVoiceRecognition()
+                                isRecognizingVoice -> Unit
                                 !hasMicrophonePermission -> {
                                     startVoiceAfterPermission = true
                                     microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
