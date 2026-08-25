@@ -92,6 +92,7 @@ import java.io.File
 import kotlinx.coroutines.delay
 
 private val MobileBlue = Color(0xFF2E66E9)
+private val MobileModeAccent = Color(0xFFFF6900)
 
 @Composable
 fun PsopModeSelectionScreen(
@@ -379,14 +380,14 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             ) {
                 Text(
                     "语音提问",
-                    color = if (!isCaptureMode) Color.White else Color(0xFFB8C4D6),
+                    color = if (!isCaptureMode) MobileModeAccent else Color(0xFFB8C4D6),
                     fontSize = 13.sp,
                     fontWeight = if (!isCaptureMode) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.clickable { isCaptureMode = false }
                 )
                 Text(
                     "拍摄",
-                    color = if (isCaptureMode) Color.White else Color(0xFFB8C4D6),
+                    color = if (isCaptureMode) MobileModeAccent else Color(0xFFB8C4D6),
                     fontSize = 13.sp,
                     fontWeight = if (isCaptureMode) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.clickable { isCaptureMode = true }
