@@ -1,7 +1,20 @@
 package com.rokid.cxrmsamples.activities.psopDemo
 
+import android.Manifest
 import android.content.Intent
+import android.content.Context
+import android.content.pm.PackageManager
+import android.graphics.SurfaceTexture
+import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraDevice
+import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CaptureRequest
+import android.os.Handler
+import android.os.HandlerThread
 import android.speech.RecognizerIntent
+import android.view.Surface
+import android.view.TextureView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,6 +31,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,6 +66,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,12 +76,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 
 private val MobileBlue = Color(0xFF2E66E9)
 private val ArGreen = Color(0xFF47F081)
@@ -190,24 +206,26 @@ fun PsopMobileHomeScreen(
     }
 }
 
-private enum class MobileArState { SCANNING, READY }
-
 @Composable
 fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var showMenu by remember { mutableStateOf(false) }
     var showChat by rememberSaveable { mutableStateOf(false) }
-    var arState by rememberSaveable { mutableStateOf(MobileArState.SCANNING) }
+    val context = LocalContext.current
+    var hasCameraPermission by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        hasCameraPermission = it
+    }
+    LaunchedEffect(Unit) {
+        if (!hasCameraPermission) cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+    }
     val voiceLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val text = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
         if (!text.isNullOrBlank()) {
             viewModel.submitInput(text)
             showChat = true
         }
-    }
-
-    LaunchedEffect(Unit) {
-        delay(1200)
-        if (arState == MobileArState.SCANNING) arState = MobileArState.READY
     }
 
     BackHandler {
@@ -224,14 +242,14 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.linearGradient(listOf(Color(0xFF9DA8B2), Color(0xFF32404D), Color(0xFF18242E))))
+        modifier = Modifier.fillMaxSize().background(Color(0xFF101820))
     ) {
-        MotherboardScene(
-            state = arState,
-            modifier = Modifier.fillMaxSize()
-        )
+        if (hasCameraPermission) {
+            MobileCameraPreview(modifier = Modifier.fillMaxSize())
+            ArTaskOverlay(modifier = Modifier.fillMaxSize())
+        } else {
+            CameraPermissionContent(onRequestPermission = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) })
+        }
         Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -244,7 +262,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             Column {
                 Text(uiState.selectedSkill?.name ?: "当前巡检任务", color = Color.White, fontSize = 12.sp)
                 Text(
-                    "01 / 07 · 实时识别中",
+                    "任务进行中 · 现场画面",
                     color = Color(0xFFD7E4FF),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
@@ -288,47 +306,39 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
 }
 
 @Composable
-private fun MotherboardScene(state: MobileArState, modifier: Modifier = Modifier) {
+private fun CameraPermissionContent(onRequestPermission: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("需要相机权限", color = Color.White, style = MaterialTheme.typography.titleLarge)
+        Text("授权后将显示现场画面并进入任务引导", color = Color(0xFFD7E4FF), modifier = Modifier.padding(top = 8.dp))
+        Button(onClick = onRequestPermission, modifier = Modifier.padding(top = 18.dp)) {
+            Text("开启相机")
+        }
+    }
+}
+
+@Composable
+private fun ArTaskOverlay(modifier: Modifier = Modifier) {
     Box(modifier) {
         Box(
             modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 34.dp)
-                .size(width = 132.dp, height = 112.dp)
-                .background(Color(0xFF17212A), RoundedCornerShape(3.dp))
-                .padding(8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("CPU SOCKET", color = Color(0xFFD5DCE4), fontSize = 12.sp)
-        }
-        listOf("A1", "A2", "B1", "B2").forEachIndexed { index, name ->
-            val highlight = name == "A2" || name == "B2"
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = (38 + (3 - index) * 39).dp)
-                    .size(width = 27.dp, height = 230.dp)
-                    .background(Color(0xFF192632), RoundedCornerShape(5.dp))
-                    .then(
-                        if (highlight) Modifier.border(
-                            BorderStroke(2.dp, ArGreen),
-                            RoundedCornerShape(5.dp)
-                        ) else Modifier
-                    )
-            ) {
-                Text(
-                    text = name,
-                    color = if (highlight) ArGreen else Color(0xFFD9E0E7),
-                    fontSize = 11.sp,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
-                )
-            }
-        }
+                .align(Alignment.Center)
+                .size(width = 230.dp, height = 180.dp)
+                .border(BorderStroke(2.dp, ArGreen), RoundedCornerShape(8.dp))
+                .background(ArGreenSoft, RoundedCornerShape(8.dp))
+        )
         Text(
-            text = when (state) {
-                MobileArState.SCANNING -> "正在识别目标槽位"
-                MobileArState.READY -> "已识别当前任务目标"
-            },
+            text = "当前任务操作区域",
+            color = ArGreen,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.align(Alignment.Center).offset(y = (-112).dp)
+        )
+        Text(
+            text = "请按当前任务要求完成操作",
             color = Color.White,
             fontSize = 12.sp,
             modifier = Modifier
@@ -338,6 +348,100 @@ private fun MotherboardScene(state: MobileArState, modifier: Modifier = Modifier
                 .background(Color(0xC9162A44))
                 .padding(horizontal = 10.dp, vertical = 7.dp)
         )
+    }
+}
+
+@Composable
+private fun MobileCameraPreview(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val textureView = remember { TextureView(context) }
+
+    AndroidView(factory = { textureView }, modifier = modifier)
+
+    DisposableEffect(textureView) {
+        val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        val cameraThread = HandlerThread("psop-mobile-camera").apply { start() }
+        val cameraHandler = Handler(cameraThread.looper)
+        var cameraDevice: CameraDevice? = null
+        var captureSession: CameraCaptureSession? = null
+        var openingCamera = false
+
+        fun closeCamera() {
+            captureSession?.close()
+            captureSession = null
+            cameraDevice?.close()
+            cameraDevice = null
+            openingCamera = false
+        }
+
+        fun startPreview(surfaceTexture: SurfaceTexture) {
+            val camera = cameraDevice ?: return
+            surfaceTexture.setDefaultBufferSize(textureView.width.coerceAtLeast(1), textureView.height.coerceAtLeast(1))
+            val surface = Surface(surfaceTexture)
+            camera.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {
+                override fun onConfigured(session: CameraCaptureSession) {
+                    captureSession = session
+                    val request = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+                        addTarget(surface)
+                        set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+                    }.build()
+                    session.setRepeatingRequest(request, null, cameraHandler)
+                }
+
+                override fun onConfigureFailed(session: CameraCaptureSession) = Unit
+            }, cameraHandler)
+        }
+
+        val cameraCallback = object : CameraDevice.StateCallback() {
+            override fun onOpened(camera: CameraDevice) {
+                openingCamera = false
+                cameraDevice = camera
+                textureView.surfaceTexture?.let(::startPreview)
+            }
+
+            override fun onDisconnected(camera: CameraDevice) {
+                camera.close()
+                cameraDevice = null
+                openingCamera = false
+            }
+
+            override fun onError(camera: CameraDevice, error: Int) {
+                camera.close()
+                cameraDevice = null
+                openingCamera = false
+            }
+        }
+
+        fun openBackCamera() {
+            if (cameraDevice != null || openingCamera || !textureView.isAvailable) return
+            val cameraId = try {
+                cameraManager.cameraIdList.firstOrNull { id ->
+                    cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK
+                }
+            } catch (_: Exception) {
+                null
+            } ?: return
+            openingCamera = true
+            try {
+                cameraManager.openCamera(cameraId, cameraCallback, cameraHandler)
+            } catch (_: SecurityException) {
+                openingCamera = false
+            }
+        }
+
+        textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) = openBackCamera()
+            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) = Unit
+            override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean = true
+            override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
+        }
+        openBackCamera()
+
+        onDispose {
+            textureView.surfaceTextureListener = null
+            closeCamera()
+            cameraThread.quitSafely()
+        }
     }
 }
 
