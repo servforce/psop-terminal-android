@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
@@ -45,6 +46,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardVoice
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
@@ -89,6 +91,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.collect
 import java.util.Locale
+import java.io.File
 
 private val MobileBlue = Color(0xFF2E66E9)
 
@@ -248,6 +251,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     MobileAnswerSpeaker(viewModel)
     var showMenu by remember { mutableStateOf(false) }
     var showChat by rememberSaveable { mutableStateOf(false) }
+    var captureFrame by remember { mutableStateOf<(() -> Bitmap?)?>(null) }
     val context = LocalContext.current
     var hasCameraPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -331,7 +335,10 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         modifier = Modifier.fillMaxSize().background(Color(0xFF101820))
     ) {
         if (hasCameraPermission) {
-            MobileCameraPreview(modifier = Modifier.fillMaxSize())
+            MobileCameraPreview(
+                onCaptureFrameAvailable = { captureFrame = it },
+                modifier = Modifier.fillMaxSize()
+            )
         } else {
             CameraPermissionContent(onRequestPermission = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) })
         }
@@ -393,6 +400,29 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 )
             }
         }
+        if (hasCameraPermission) {
+            Surface(
+                shape = CircleShape,
+                color = Color.White,
+                shadowElevation = 8.dp,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 34.dp).size(52.dp)
+            ) {
+                IconButton(
+                    onClick = {
+                        val bitmap = captureFrame?.invoke() ?: return@IconButton
+                        val photoDir = File(context.cacheDir, "psop_mobile_photos").apply { mkdirs() }
+                        val photoFile = File.createTempFile("capture_", ".jpg", photoDir)
+                        photoFile.outputStream().use { output ->
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
+                        }
+                        viewModel.uploadFile(photoFile)
+                        showChat = true
+                    }
+                ) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = "拍摄并发送", tint = MobileBlue)
+                }
+            }
+        }
     }
 }
 
@@ -412,13 +442,17 @@ private fun CameraPermissionContent(onRequestPermission: () -> Unit) {
 }
 
 @Composable
-private fun MobileCameraPreview(modifier: Modifier = Modifier) {
+private fun MobileCameraPreview(
+    onCaptureFrameAvailable: ((() -> Bitmap?)?) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val textureView = remember { TextureView(context) }
 
     AndroidView(factory = { textureView }, modifier = modifier)
 
     DisposableEffect(textureView) {
+        onCaptureFrameAvailable { textureView.bitmap }
         val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         val cameraThread = HandlerThread("psop-mobile-camera").apply { start() }
         val cameraHandler = Handler(cameraThread.looper)
@@ -498,6 +532,7 @@ private fun MobileCameraPreview(modifier: Modifier = Modifier) {
         openBackCamera()
 
         onDispose {
+            onCaptureFrameAvailable(null)
             textureView.surfaceTextureListener = null
             closeCamera()
             cameraThread.quitSafely()
