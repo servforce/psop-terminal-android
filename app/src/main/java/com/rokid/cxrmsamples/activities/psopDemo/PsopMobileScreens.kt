@@ -84,8 +84,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 
 private val MobileBlue = Color(0xFF2E66E9)
-private val ArGreen = Color(0xFF47F081)
-private val ArGreenSoft = Color(0x6647F081)
 
 @Composable
 fun PsopModeSelectionScreen(
@@ -245,7 +243,6 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     ) {
         if (hasCameraPermission) {
             MobileCameraPreview(modifier = Modifier.fillMaxSize())
-            ArTaskOverlay(modifier = Modifier.fillMaxSize())
         } else {
             CameraPermissionContent(onRequestPermission = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) })
         }
@@ -316,19 +313,6 @@ private fun CameraPermissionContent(onRequestPermission: () -> Unit) {
         Button(onClick = onRequestPermission, modifier = Modifier.padding(top = 18.dp)) {
             Text("开启相机")
         }
-    }
-}
-
-@Composable
-private fun ArTaskOverlay(modifier: Modifier = Modifier) {
-    Box(modifier) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(width = 230.dp, height = 180.dp)
-                .border(BorderStroke(2.dp, ArGreen), RoundedCornerShape(8.dp))
-                .background(ArGreenSoft, RoundedCornerShape(8.dp))
-        )
     }
 }
 
