@@ -383,8 +383,8 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     val selectedModeOffset by animateDpAsState(
         targetValue = when {
             showMenu -> (-52).dp
-            isCaptureMode -> 0.dp
-            else -> 52.dp
+            isCaptureMode -> 52.dp
+            else -> 0.dp
         },
         label = "mobileModeAlignment"
     )
@@ -677,16 +677,6 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 horizontalArrangement = Arrangement.spacedBy(26.dp)
             ) {
                 Text(
-                    "语音",
-                    color = if (!isCaptureMode && !showMenu) MobileModeAccent else Color(0xFFB8C4D6),
-                    fontSize = 13.sp,
-                    fontWeight = if (!isCaptureMode && !showMenu) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.clickable(
-                        interactionSource = voiceModeInteraction,
-                        indication = null
-                    ) { isCaptureMode = false; showMenu = false }
-                )
-                Text(
                     "拍摄",
                     color = if (isCaptureMode && !showMenu) MobileModeAccent else Color(0xFFB8C4D6),
                     fontSize = 13.sp,
@@ -695,6 +685,16 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                         interactionSource = captureModeInteraction,
                         indication = null
                     ) { isCaptureMode = true; showMenu = false }
+                )
+                Text(
+                    "语音",
+                    color = if (!isCaptureMode && !showMenu) MobileModeAccent else Color(0xFFB8C4D6),
+                    fontSize = 13.sp,
+                    fontWeight = if (!isCaptureMode && !showMenu) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.clickable(
+                        interactionSource = voiceModeInteraction,
+                        indication = null
+                    ) { isCaptureMode = false; showMenu = false }
                 )
                 Text(
                     "更多",
