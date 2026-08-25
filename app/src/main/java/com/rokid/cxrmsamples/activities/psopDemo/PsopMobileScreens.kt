@@ -599,7 +599,7 @@ private fun MobileCameraPreview(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MobileTaskChatScreen(
+internal fun MobileTaskChatScreen(
     uiState: PsopDemoUiState,
     onBack: () -> Unit,
     onSend: (String) -> Unit
@@ -637,7 +637,12 @@ private fun MobileTaskChatScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item {
-                    Text("当前处于 AR 任务中。描述问题后，返回 AR 继续实时识别。", color = Color(0xFF60708A), modifier = Modifier.padding(vertical = 12.dp))
+                    Text(
+                        if (uiState.isRunning) "当前处于 AR 任务中。描述问题后，返回 AR 继续实时识别。"
+                        else "当前未进入现场执行，可直接向 AI 提问。",
+                        color = Color(0xFF60708A),
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
                 }
                 items(uiState.messages, key = { it.id }) { message ->
                     MessageBubble(message = message)

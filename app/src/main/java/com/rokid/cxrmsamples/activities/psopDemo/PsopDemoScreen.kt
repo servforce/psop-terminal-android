@@ -232,7 +232,15 @@ fun PsopDemoScreen(
         )
         InspectionScreen.INTERACTION -> {
             if (uiState.operatingMode == PsopOperatingMode.MOBILE) {
-                MobileArTaskScreen(viewModel = viewModel, uiState = uiState)
+                if (uiState.isRunning) {
+                    MobileArTaskScreen(viewModel = viewModel, uiState = uiState)
+                } else {
+                    MobileTaskChatScreen(
+                        uiState = uiState,
+                        onBack = viewModel::navigateBack,
+                        onSend = viewModel::submitInput
+                    )
+                }
             } else {
                 InteractionScreen(viewModel = viewModel, uiState = uiState)
             }
