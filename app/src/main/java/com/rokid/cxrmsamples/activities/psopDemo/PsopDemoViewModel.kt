@@ -4,8 +4,10 @@ import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.AudioAttributes
 import android.os.Looper
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -959,9 +961,26 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                     isPhoneTtsReady = status == TextToSpeech.SUCCESS
                     val readyTts = phoneTextToSpeech
                     if (isPhoneTtsReady && readyTts != null) {
-                        readyTts.language = Locale.SIMPLIFIED_CHINESE
+                        readyTts.setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                        )
+                        readyTts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                            override fun onStart(utteranceId: String) = Log.d(TAG, "Phone TTS started: $utteranceId")
+                            override fun onDone(utteranceId: String) = Log.d(TAG, "Phone TTS completed: $utteranceId")
+                            @Deprecated("Deprecated in Java")
+                            override fun onError(utteranceId: String) = Log.w(TAG, "Phone TTS failed: $utteranceId")
+                            override fun onError(utteranceId: String, errorCode: Int) = Log.w(TAG, "Phone TTS failed: $utteranceId, code=$errorCode")
+                        })
+                        val languageStatus = readyTts.setLanguage(Locale.SIMPLIFIED_CHINESE)
+                        if (languageStatus == TextToSpeech.LANG_MISSING_DATA || languageStatus == TextToSpeech.LANG_NOT_SUPPORTED) {
+                            Log.w(TAG, "Chinese TTS unavailable, falling back to device default language")
+                            readyTts.language = Locale.getDefault()
+                        }
                         pendingPhoneTtsText?.let { pending ->
-                            readyTts.speak(pending, TextToSpeech.QUEUE_FLUSH, null, "psop-phone-${System.nanoTime()}")
+                            playPhoneTts(readyTts, pending)
                         }
                         pendingPhoneTtsText = null
                     } else {
@@ -975,7 +994,13 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
             pendingPhoneTtsText = trimmedText
             return
         }
-        existingTts.speak(trimmedText, TextToSpeech.QUEUE_FLUSH, null, "psop-phone-${System.nanoTime()}")
+        playPhoneTts(existingTts, trimmedText)
+    }
+
+    private fun playPhoneTts(textToSpeech: TextToSpeech, text: String) {
+        val utteranceId = "psop-phone-${System.nanoTime()}"
+        val result = textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+        Log.d(TAG, "Phone TTS speak result=$result, utterance=$utteranceId, text=${text.take(40)}")
     }
 
     /**
