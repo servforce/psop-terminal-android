@@ -12,7 +12,10 @@ import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CaptureRequest
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Bundle
+import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.view.Surface
 import android.view.TextureView
 import androidx.activity.compose.BackHandler
@@ -49,6 +52,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -217,11 +221,59 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
     }
-    val voiceLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val text = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (!text.isNullOrBlank()) {
-            viewModel.submitInput(text)
+    var hasMicrophonePermission by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+    }
+    var isListening by rememberSaveable { mutableStateOf(false) }
+    var startVoiceAfterPermission by rememberSaveable { mutableStateOf(false) }
+    val speechRecognizer = remember(context) {
+        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+    }
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        hasMicrophonePermission = granted
+        startVoiceAfterPermission = granted
+    }
+
+    fun startVoiceRecognition() {
+        if (speechRecognizer == null) {
             showChat = true
+            return
+        }
+        isListening = true
+        speechRecognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        })
+    }
+
+    DisposableEffect(speechRecognizer) {
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) = Unit
+            override fun onBeginningOfSpeech() = Unit
+            override fun onRmsChanged(rmsdB: Float) = Unit
+            override fun onBufferReceived(buffer: ByteArray?) = Unit
+            override fun onEndOfSpeech() = Unit
+            override fun onError(error: Int) { isListening = false }
+            override fun onResults(results: Bundle?) {
+                isListening = false
+                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                if (!text.isNullOrBlank()) {
+                    viewModel.submitInput(text)
+                    showChat = true
+                }
+            }
+            override fun onPartialResults(partialResults: Bundle?) = Unit
+            override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        })
+        onDispose {
+            speechRecognizer?.destroy()
+        }
+    }
+
+    LaunchedEffect(startVoiceAfterPermission, hasMicrophonePermission) {
+        if (startVoiceAfterPermission && hasMicrophonePermission) {
+            startVoiceAfterPermission = false
+            startVoiceRecognition()
         }
     }
 
@@ -281,21 +333,27 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         }
         Surface(
             shape = CircleShape,
-            color = MobileBlue,
+            color = if (isListening) Color.White else MobileBlue,
             shadowElevation = 8.dp,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 34.dp).size(58.dp)
         ) {
             IconButton(
                 onClick = {
-                    voiceLauncher.launch(
-                        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                            putExtra(RecognizerIntent.EXTRA_PROMPT, "请说出你的问题")
+                    when {
+                        isListening -> speechRecognizer?.stopListening()
+                        !hasMicrophonePermission -> {
+                            startVoiceAfterPermission = true
+                            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
-                    )
+                        else -> startVoiceRecognition()
+                    }
                 }
             ) {
-                Icon(Icons.Default.KeyboardVoice, contentDescription = "语音助手", tint = Color.White)
+                Icon(
+                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.KeyboardVoice,
+                    contentDescription = if (isListening) "停止语音" else "语音助手",
+                    tint = if (isListening) MobileBlue else Color.White
+                )
             }
         }
     }

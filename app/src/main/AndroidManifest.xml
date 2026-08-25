@@ -52,6 +52,7 @@
             android:name=".activities.psopDemo.PsopDemoActivity"
             android:exported="false"
             android:label="PSOP 智能巡检"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.CXRMSamples" />
         <activity
             android:name=".activities.p2pStabilityTest.P2pStabilityTestActivity"
