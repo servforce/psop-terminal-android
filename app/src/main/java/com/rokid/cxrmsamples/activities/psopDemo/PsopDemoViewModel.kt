@@ -4,10 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.AudioAttributes
 import android.os.Looper
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -29,6 +26,7 @@ import com.rokid.cxrmsamples.activities.liveVideo.LiveVideoMp4Recorder
 import com.rokid.cxrmsamples.activities.mediaFile.P2PListener
 import com.rokid.cxrmsamples.activities.mediaFile.P2PUtils
 import com.rokid.cxrmsamples.asr.SherpaAsrEngine
+import com.rokid.cxrmsamples.tts.OfflinePhoneTts
 import com.rokid.cxrmsamples.dataBeans.selfView.ImageViewProps
 import com.rokid.cxrmsamples.dataBeans.selfView.LinearLayoutProps
 import com.rokid.cxrmsamples.dataBeans.selfView.SelfViewJson
@@ -166,10 +164,8 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     private val _uiState = MutableStateFlow(PsopDemoUiState())
     val uiState: StateFlow<PsopDemoUiState> = _uiState.asStateFlow()
 
-    // 手机模式的 AI 回复由 Android TextToSpeech 直接从手机扬声器播报。
-    private var phoneTextToSpeech: TextToSpeech? = null
-    private var isPhoneTtsReady = false
-    private var pendingPhoneTtsText: String? = null
+    // 仅在手机模式首次收到 AI 回复时初始化；眼镜模式不创建离线 TTS 资源。
+    private var phoneOfflineTts: OfflinePhoneTts? = null
 
     /** 本地已收到的最大 seq_no */
     private var lastSeqNo: Int = 0
@@ -947,68 +943,10 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
 
     /** 手机模式本地播报：不调用 CXR，也不会向眼镜发送任何文字。 */
     private fun speakOnPhone(text: String) {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            viewModelScope.launch(Dispatchers.Main) { speakOnPhone(text) }
-            return
+        val tts = phoneOfflineTts ?: OfflinePhoneTts(getApplication<Application>()).also {
+            phoneOfflineTts = it
         }
-        val trimmedText = text.trim()
-        if (trimmedText.isBlank()) return
-        val existingTts = phoneTextToSpeech
-        if (existingTts == null) {
-            pendingPhoneTtsText = trimmedText
-            phoneTextToSpeech = TextToSpeech(getApplication<Application>()) { status ->
-                viewModelScope.launch(Dispatchers.Main) {
-                    isPhoneTtsReady = status == TextToSpeech.SUCCESS
-                    val readyTts = phoneTextToSpeech
-                    if (isPhoneTtsReady && readyTts != null) {
-                        readyTts.setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build()
-                        )
-                        readyTts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                            override fun onStart(utteranceId: String) {
-                                Log.d(TAG, "Phone TTS started: $utteranceId")
-                            }
-                            override fun onDone(utteranceId: String) {
-                                Log.d(TAG, "Phone TTS completed: $utteranceId")
-                            }
-                            @Deprecated("Deprecated in Java")
-                            override fun onError(utteranceId: String) {
-                                Log.w(TAG, "Phone TTS failed: $utteranceId")
-                            }
-                            override fun onError(utteranceId: String, errorCode: Int) {
-                                Log.w(TAG, "Phone TTS failed: $utteranceId, code=$errorCode")
-                            }
-                        })
-                        val languageStatus = readyTts.setLanguage(Locale.SIMPLIFIED_CHINESE)
-                        if (languageStatus == TextToSpeech.LANG_MISSING_DATA || languageStatus == TextToSpeech.LANG_NOT_SUPPORTED) {
-                            Log.w(TAG, "Chinese TTS unavailable, falling back to device default language")
-                            readyTts.language = Locale.getDefault()
-                        }
-                        pendingPhoneTtsText?.let { pending ->
-                            playPhoneTts(readyTts, pending)
-                        }
-                        pendingPhoneTtsText = null
-                    } else {
-                        Log.w(TAG, "Phone TextToSpeech initialization failed: $status")
-                    }
-                }
-            }
-            return
-        }
-        if (!isPhoneTtsReady) {
-            pendingPhoneTtsText = trimmedText
-            return
-        }
-        playPhoneTts(existingTts, trimmedText)
-    }
-
-    private fun playPhoneTts(textToSpeech: TextToSpeech, text: String) {
-        val utteranceId = "psop-phone-${System.nanoTime()}"
-        val result = textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
-        Log.d(TAG, "Phone TTS speak result=$result, utterance=$utteranceId, text=${text.take(40)}")
+        tts.speak(text)
     }
 
     /**
@@ -4711,11 +4649,8 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         ttsRetryJob = null
         ttsPreemptFlagResetJob?.cancel()
         ttsPreemptFlagResetJob = null
-        phoneTextToSpeech?.stop()
-        phoneTextToSpeech?.shutdown()
-        phoneTextToSpeech = null
-        isPhoneTtsReady = false
-        pendingPhoneTtsText = null
+        phoneOfflineTts?.release()
+        phoneOfflineTts = null
         // 清理 P2P 同步资源
         isHwPhotoSyncing = false
         isHwPhotoRoundClaimed = false

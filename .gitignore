@@ -30,6 +30,9 @@ ISSUE-*.md
 app/libs/*.aar
 app/src/main/assets/sherpa-models/*.onnx
 
+# Versioned offline phone TTS runtime and Chinese voice model.
+!app/libs/sherpa-onnx-1.13.6.aar
+
 # JVM crash/replay logs
 hs_err_pid*.log
 replay_pid*.log
