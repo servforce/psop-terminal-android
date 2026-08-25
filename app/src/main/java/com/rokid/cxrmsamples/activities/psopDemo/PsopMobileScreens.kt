@@ -16,6 +16,7 @@ import android.media.MediaRecorder
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
+import android.view.MotionEvent
 import android.view.Surface
 import android.view.TextureView
 import androidx.activity.compose.BackHandler
@@ -73,15 +74,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -207,7 +212,7 @@ private class MobileOfflineAsrRecorder(context: Context) {
         }
     }
 
-    fun release() {
+    fun cancelRecording() {
         isCapturing = false
         val recorder = audioRecord
         audioRecord = null
@@ -215,6 +220,11 @@ private class MobileOfflineAsrRecorder(context: Context) {
         runCatching { recorder?.release() }
         captureJob?.cancel()
         captureJob = null
+        synchronized(outputLock) { output = ByteArrayOutputStream() }
+    }
+
+    fun release() {
+        cancelRecording()
         scope.cancel()
     }
 }
@@ -365,12 +375,13 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     }
     var isListening by rememberSaveable { mutableStateOf(false) }
     var isRecognizingVoice by rememberSaveable { mutableStateOf(false) }
-    var startVoiceAfterPermission by rememberSaveable { mutableStateOf(false) }
+    var isVoiceCancelArmed by rememberSaveable { mutableStateOf(false) }
+    var voiceTouchStartY by remember { mutableFloatStateOf(0f) }
     val coroutineScope = rememberCoroutineScope()
     val offlineAsrRecorder = remember(context) { MobileOfflineAsrRecorder(context) }
     val microphonePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasMicrophonePermission = granted
-        startVoiceAfterPermission = granted
+        if (!granted) captureStatus = "需要麦克风权限才能语音提问"
     }
 
     fun startVoiceRecognition() {
@@ -379,12 +390,15 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             captureStatus = error
         } else {
             isListening = true
+            isVoiceCancelArmed = false
+            captureStatus = "松开发送"
         }
     }
 
     fun stopVoiceRecognition() {
         if (!isListening) return
         isListening = false
+        isVoiceCancelArmed = false
         isRecognizingVoice = true
         captureStatus = "正在离线识别…"
         coroutineScope.launch {
@@ -402,6 +416,14 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         }
     }
 
+    fun cancelVoiceRecognition() {
+        if (!isListening) return
+        offlineAsrRecorder.cancelRecording()
+        isListening = false
+        isVoiceCancelArmed = false
+        captureStatus = "已取消语音输入"
+    }
+
     fun captureAndUpload() {
         val bitmap = captureFrame?.invoke() ?: return
         val photoDir = File(context.cacheDir, "psop_mobile_photos").apply { mkdirs() }
@@ -417,7 +439,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     }
 
     LaunchedEffect(captureStatus) {
-        if (captureStatus != null && !isRecognizingVoice) {
+        if (captureStatus != null && !isRecognizingVoice && !isListening) {
             delay(2400)
             captureStatus = null
         }
@@ -450,12 +472,18 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         }
     }
 
-    LaunchedEffect(startVoiceAfterPermission, hasMicrophonePermission) {
-        if (startVoiceAfterPermission && hasMicrophonePermission) {
-            startVoiceAfterPermission = false
-            startVoiceRecognition()
-        }
-    }
+    val currentStartVoice by rememberUpdatedState(newValue = { startVoiceRecognition() })
+    val currentStopVoice by rememberUpdatedState(newValue = { stopVoiceRecognition() })
+    val currentCancelVoice by rememberUpdatedState(newValue = { cancelVoiceRecognition() })
+    val currentIsListening by rememberUpdatedState(newValue = isListening)
+    val currentIsVoiceCancelArmed by rememberUpdatedState(newValue = isVoiceCancelArmed)
+    val currentUpdateVoiceCancelHint by rememberUpdatedState(newValue = { cancelArmed: Boolean ->
+        isVoiceCancelArmed = cancelArmed
+        captureStatus = if (cancelArmed) "松开取消" else "松开发送"
+    })
+    val currentRequestMicrophonePermission by rememberUpdatedState(newValue = {
+        microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    })
 
     BackHandler {
         if (showChat) showChat = false else viewModel.navigateBack()
@@ -559,28 +587,62 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 shadowElevation = 8.dp,
                 modifier = Modifier.size(62.dp)
             ) {
-                IconButton(
-                    onClick = {
-                        if (isCaptureMode) {
+                if (isCaptureMode) {
+                    IconButton(
+                        onClick = {
                             if (hasCameraPermission) captureAndUpload() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                        } else {
-                            when {
-                                isListening -> stopVoiceRecognition()
-                                isRecognizingVoice -> Unit
-                                !hasMicrophonePermission -> {
-                                    startVoiceAfterPermission = true
-                                    microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                }
-                                else -> startVoiceRecognition()
-                            }
                         }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = "拍摄并校验",
+                            tint = MobileBlue
+                        )
                     }
-                ) {
-                    Icon(
-                        imageVector = if (isCaptureMode) Icons.Default.CameraAlt else if (isListening) Icons.Default.Stop else Icons.Default.KeyboardVoice,
-                        contentDescription = if (isCaptureMode) "拍摄并校验" else if (isListening) "停止语音" else "语音助手",
-                        tint = if (isCaptureMode || isListening) MobileBlue else Color.White
-                    )
+                } else {
+                    val cancelDistancePx = with(LocalDensity.current) { 72.dp.toPx() }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInteropFilter { event ->
+                                when (event.actionMasked) {
+                                    MotionEvent.ACTION_DOWN -> {
+                                        if (isRecognizingVoice) return@pointerInteropFilter true
+                                        if (!hasMicrophonePermission) {
+                                            currentRequestMicrophonePermission()
+                                        } else {
+                                            voiceTouchStartY = event.y
+                                            currentStartVoice()
+                                        }
+                                        true
+                                    }
+                                    MotionEvent.ACTION_MOVE -> {
+                                        if (currentIsListening) {
+                                            currentUpdateVoiceCancelHint(event.y < voiceTouchStartY - cancelDistancePx)
+                                        }
+                                        true
+                                    }
+                                    MotionEvent.ACTION_UP -> {
+                                        if (currentIsListening) {
+                                            if (currentIsVoiceCancelArmed) currentCancelVoice() else currentStopVoice()
+                                        }
+                                        true
+                                    }
+                                    MotionEvent.ACTION_CANCEL -> {
+                                        if (currentIsListening) currentCancelVoice()
+                                        true
+                                    }
+                                    else -> true
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isListening) Icons.Default.Stop else Icons.Default.KeyboardVoice,
+                            contentDescription = if (isListening) "松开发送" else "按住语音助手",
+                            tint = if (isListening) MobileBlue else Color.White
+                        )
+                    }
                 }
             }
         }
