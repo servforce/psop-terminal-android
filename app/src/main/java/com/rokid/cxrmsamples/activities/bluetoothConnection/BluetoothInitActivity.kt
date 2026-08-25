@@ -5,12 +5,14 @@ package com.rokid.cxrmsamples.activities.bluetoothConnection
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,24 +49,55 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.ContextCompat
 import com.rokid.cxrmsamples.R
 import com.rokid.cxrmsamples.activities.psopDemo.PsopDemoActivity
 import com.rokid.cxrmsamples.activities.psopDemo.PsopOperatingMode
+import com.rokid.cxrmsamples.dataBeans.CONSTANT
 import com.rokid.cxrmsamples.ui.theme.PsopTheme
 
 class BluetoothInitActivity : ComponentActivity() {
 
     private val viewModel: BluetoothIniViewModel by viewModels()
     lateinit var btManager: BluetoothManager
+    private var pendingBluetoothAction: (() -> Unit)? = null
+    private val bluetoothPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        if (hasBluetoothPermissions()) {
+            pendingBluetoothAction?.invoke()
+        } else {
+            Toast.makeText(this, "未授予附近设备权限，无法扫描眼镜", Toast.LENGTH_SHORT).show()
+        }
+        pendingBluetoothAction = null
+    }
+
+    private fun hasBluetoothPermissions(): Boolean = CONSTANT.BLUETOOTH_PERMISSIONS.all { permission ->
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun runWithBluetoothPermissions(action: () -> Unit) {
+        if (hasBluetoothPermissions()) {
+            action()
+        } else {
+            pendingBluetoothAction = action
+            bluetoothPermissionLauncher.launch(
+                CONSTANT.BLUETOOTH_PERMISSIONS.filter { permission ->
+                    ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
+                }.toTypedArray()
+            )
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             PsopTheme {
                 BluetoothConnectionScreen(viewModel = viewModel, reconnect = {
-                    viewModel.reconnectSavedDevice(this)
+                    runWithBluetoothPermissions { viewModel.reconnectSavedDevice(this) }
                 }, scan = {
-                    viewModel.handleScan(btManager.adapter.bluetoothLeScanner)
+                    runWithBluetoothPermissions { viewModel.handleScan(btManager.adapter.bluetoothLeScanner) }
                 }, onItemClicked = { deviceItem ->
                     viewModel.handleScan(btManager.adapter.bluetoothLeScanner)
                     viewModel.deviceClicked(this, deviceItem)
