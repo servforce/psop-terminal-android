@@ -66,8 +66,6 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -548,6 +546,37 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     Text(status, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
                 }
             }
+            if (showMenu) {
+                Surface(
+                    color = Color(0xE8172A44),
+                    shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(1.dp, Color(0xFF37526F)),
+                    shadowElevation = 10.dp,
+                    modifier = Modifier
+                        .padding(bottom = 14.dp)
+                        .clickable { showMenu = false; showChat = true }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(MobileBlue.copy(alpha = 0.26f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF9EC1FF), modifier = Modifier.size(17.dp))
+                        }
+                        Column {
+                            Text("AI 对话", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("描述现场问题，获取操作建议", color = Color(0xFFAFC2D9), fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
             Row(
                 modifier = Modifier.padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(26.dp)
@@ -560,7 +589,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     modifier = Modifier.clickable(
                         interactionSource = voiceModeInteraction,
                         indication = null
-                    ) { isCaptureMode = false }
+                    ) { isCaptureMode = false; showMenu = false }
                 )
                 Text(
                     "拍摄",
@@ -570,26 +599,18 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     modifier = Modifier.clickable(
                         interactionSource = captureModeInteraction,
                         indication = null
-                    ) { isCaptureMode = true }
+                    ) { isCaptureMode = true; showMenu = false }
                 )
-                Box {
-                    Text(
-                        "更多",
-                        color = if (showMenu) MobileModeAccent else Color(0xFFB8C4D6),
-                        fontSize = 13.sp,
-                        fontWeight = if (showMenu) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.clickable(
-                            interactionSource = moreModeInteraction,
-                            indication = null
-                        ) { showMenu = true }
-                    )
-                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("AI 对话") },
-                            onClick = { showMenu = false; showChat = true }
-                        )
-                    }
-                }
+                Text(
+                    "更多",
+                    color = if (showMenu) MobileModeAccent else Color(0xFFB8C4D6),
+                    fontSize = 13.sp,
+                    fontWeight = if (showMenu) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.clickable(
+                        interactionSource = moreModeInteraction,
+                        indication = null
+                    ) { showMenu = !showMenu }
+                )
             }
             Surface(
                 shape = CircleShape,
@@ -603,7 +624,6 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                             if (hasCameraPermission) captureAndUpload() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                         }
                     ) {
-                        if (isListening) ListeningVoiceWaves()
                         Icon(
                             imageVector = Icons.Default.CameraAlt,
                             contentDescription = "拍摄并校验",
@@ -648,6 +668,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                             },
                         contentAlignment = Alignment.Center
                     ) {
+                        if (isListening) ListeningVoiceWaves()
                         Icon(
                             imageVector = if (isListening) Icons.Default.Stop else Icons.Default.KeyboardVoice,
                             contentDescription = if (isListening) "松开发送" else "按住语音助手",
