@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -329,24 +328,6 @@ private fun ArTaskOverlay(modifier: Modifier = Modifier) {
                 .size(width = 230.dp, height = 180.dp)
                 .border(BorderStroke(2.dp, ArGreen), RoundedCornerShape(8.dp))
                 .background(ArGreenSoft, RoundedCornerShape(8.dp))
-        )
-        Text(
-            text = "当前任务操作区域",
-            color = ArGreen,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.align(Alignment.Center).offset(y = (-112).dp)
-        )
-        Text(
-            text = "请按当前任务要求完成操作",
-            color = Color.White,
-            fontSize = 12.sp,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(18.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xC9162A44))
-                .padding(horizontal = 10.dp, vertical = 7.dp)
         )
     }
 }
