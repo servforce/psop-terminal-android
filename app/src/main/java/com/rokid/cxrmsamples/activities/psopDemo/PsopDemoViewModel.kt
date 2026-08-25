@@ -45,7 +45,10 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -161,6 +164,10 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
 
     private val _uiState = MutableStateFlow(PsopDemoUiState())
     val uiState: StateFlow<PsopDemoUiState> = _uiState.asStateFlow()
+
+    // 手机模式的新 AI 回复由界面使用 Android TextToSpeech 播报，不经过眼镜端链路。
+    private val _mobileTtsTexts = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val mobileTtsTexts: SharedFlow<String> = _mobileTtsTexts.asSharedFlow()
 
     /** 本地已收到的最大 seq_no */
     private var lastSeqNo: Int = 0
@@ -2681,13 +2688,17 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 }
                 val cleanedContent = msg.content.replace("[图片]", "").replace("[音频]", "").replace("[视频]", "").replace("[文件]", "").trim()
                 if (cleanedContent.isNotBlank()) {
-                    displayGlassesText(cleanedContent)
-                    delay(800L)
-                    enqueueTtsForMessage(cleanedContent)
+                    if (_uiState.value.operatingMode == PsopOperatingMode.GLASSES) {
+                        displayGlassesText(cleanedContent)
+                        delay(800L)
+                        enqueueTtsForMessage(cleanedContent)
+                    } else {
+                        _mobileTtsTexts.tryEmit(cleanedContent)
+                    }
                 }
                 // 图片 parts 与实时路径一致：仅 CustomView 模式发眼镜端轮播
                 val imgParts = msg.parts.filter { p -> p.kind == "image" }
-                if (imgParts.isNotEmpty() && _uiState.value.glassesDisplayMode == GlassesDisplayMode.CUSTOM_VIEW) {
+                if (_uiState.value.operatingMode == PsopOperatingMode.GLASSES && imgParts.isNotEmpty() && _uiState.value.glassesDisplayMode == GlassesDisplayMode.CUSTOM_VIEW) {
                     sendImagesToTeleprompter(imgParts)
                 }
             }
@@ -3814,18 +3825,22 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                         .forEach {
                             val cleaned = it.content.replace("[图片]", "").replace("[音频]", "").replace("[视频]", "").replace("[文件]", "").trim()
                             if (cleaned.isNotBlank()) {
-                                displayGlassesText(cleaned)
-                                // 延迟 800ms 再播 TTS，等待 CustomView 蓝牙指令发送完毕
-                                // 按段入队（与轮播段对齐），新消息抢占打断旧内容
-                                viewModelScope.launch {
-                                    delay(800L)
-                                    enqueueTtsForMessage(cleaned)
+                                if (_uiState.value.operatingMode == PsopOperatingMode.GLASSES) {
+                                    displayGlassesText(cleaned)
+                                    // 延迟 800ms 再播 TTS，等待 CustomView 蓝牙指令发送完毕
+                                    // 按段入队（与轮播段对齐），新消息抢占打断旧内容
+                                    viewModelScope.launch {
+                                        delay(800L)
+                                        enqueueTtsForMessage(cleaned)
+                                    }
+                                } else {
+                                    _mobileTtsTexts.tryEmit(cleaned)
                                 }
                             }
                             // 如果有图片 parts，同时发送图片到眼镜端轮播（仅 CustomView 模式：
                             // 提词器模式下图片轮播需开 CustomView，会覆盖 WORD_TIPS 场景，故跳过）
                             val imgParts = it.parts.filter { p -> p.kind == "image" }
-                            if (imgParts.isNotEmpty() && _uiState.value.glassesDisplayMode == GlassesDisplayMode.CUSTOM_VIEW) {
+                            if (_uiState.value.operatingMode == PsopOperatingMode.GLASSES && imgParts.isNotEmpty() && _uiState.value.glassesDisplayMode == GlassesDisplayMode.CUSTOM_VIEW) {
                                 sendImagesToTeleprompter(imgParts)
                             }
                         }
@@ -4116,18 +4131,22 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                     } else {
                         val cleanedContent = content.replace("[图片]", "").replace("[音频]", "").replace("[视频]", "").replace("[文件]", "").trim()
                         if (cleanedContent.isNotBlank()) {
-                            displayGlassesText(cleanedContent)
-                            // 延迟 800ms 再播 TTS，等待 CustomView 蓝牙指令发送完毕
-                            // 按段入队（与轮播段对齐），新消息抢占打断旧内容
-                            viewModelScope.launch {
-                                delay(800L)
-                                enqueueTtsForMessage(cleanedContent)
+                            if (_uiState.value.operatingMode == PsopOperatingMode.GLASSES) {
+                                displayGlassesText(cleanedContent)
+                                // 延迟 800ms 再播 TTS，等待 CustomView 蓝牙指令发送完毕
+                                // 按段入队（与轮播段对齐），新消息抢占打断旧内容
+                                viewModelScope.launch {
+                                    delay(800L)
+                                    enqueueTtsForMessage(cleanedContent)
+                                }
+                            } else {
+                                _mobileTtsTexts.tryEmit(cleanedContent)
                             }
                         }
                         // 如果有图片 parts，同时发送图片到眼镜端轮播（仅 CustomView 模式：
                         // 提词器模式下图片轮播需开 CustomView，会覆盖 WORD_TIPS 场景，故跳过）
                         val imgParts = msg.parts.filter { p -> p.kind == "image" }
-                        if (imgParts.isNotEmpty() && _uiState.value.glassesDisplayMode == GlassesDisplayMode.CUSTOM_VIEW) {
+                        if (_uiState.value.operatingMode == PsopOperatingMode.GLASSES && imgParts.isNotEmpty() && _uiState.value.glassesDisplayMode == GlassesDisplayMode.CUSTOM_VIEW) {
                             sendImagesToTeleprompter(imgParts)
                         }
                     }
