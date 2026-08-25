@@ -379,10 +379,9 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                             bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
                         }
                         viewModel.uploadFile(photoFile)
-                        showChat = true
                     }
                 ) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = "拍摄并发送", tint = MobileBlue)
+                    Icon(Icons.Default.CameraAlt, contentDescription = "拍摄并校验", tint = MobileBlue)
                 }
             }
         }
