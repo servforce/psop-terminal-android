@@ -1033,29 +1033,27 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 modifier = Modifier
                     .offset(x = selectedModeOffset)
                     .padding(bottom = 12.dp)
-                    .pointerInput(isCaptureMode, showMenu) {
-                        detectHorizontalDragGestures(
-                            onDragStart = { modeSwipeDistance = 0f },
-                            onHorizontalDrag = { _, dragAmount ->
-                                modeSwipeDistance += dragAmount
-                            },
-                            onDragEnd = {
-                                val currentIndex = when {
-                                    showMenu -> 2
-                                    isCaptureMode -> 0
-                                    else -> 1
-                                }
-                                when {
-                                    modeSwipeDistance <= -modeSwipeThresholdPx ->
-                                        selectControlMode((currentIndex + 1).coerceAtMost(2))
-                                    modeSwipeDistance >= modeSwipeThresholdPx ->
-                                        selectControlMode((currentIndex - 1).coerceAtLeast(0))
-                                }
-                                modeSwipeDistance = 0f
-                            },
-                            onDragCancel = { modeSwipeDistance = 0f }
-                        )
-                    },
+                    .then(
+                        if (showMenu) Modifier else Modifier.pointerInput(isCaptureMode) {
+                            detectHorizontalDragGestures(
+                                onDragStart = { modeSwipeDistance = 0f },
+                                onHorizontalDrag = { _, dragAmount ->
+                                    modeSwipeDistance += dragAmount
+                                },
+                                onDragEnd = {
+                                    val currentIndex = if (isCaptureMode) 0 else 1
+                                    when {
+                                        modeSwipeDistance <= -modeSwipeThresholdPx ->
+                                            selectControlMode((currentIndex + 1).coerceAtMost(2))
+                                        modeSwipeDistance >= modeSwipeThresholdPx ->
+                                            selectControlMode((currentIndex - 1).coerceAtLeast(0))
+                                    }
+                                    modeSwipeDistance = 0f
+                                },
+                                onDragCancel = { modeSwipeDistance = 0f }
+                            )
+                        }
+                    ),
                 horizontalArrangement = Arrangement.spacedBy(26.dp)
             ) {
                 Text(
@@ -1064,6 +1062,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     fontSize = 13.sp,
                     fontWeight = if (isCaptureMode && !showMenu) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.clickable(
+                        enabled = !showMenu,
                         interactionSource = captureModeInteraction,
                         indication = null
                     ) { selectControlMode(0) }
@@ -1074,6 +1073,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     fontSize = 13.sp,
                     fontWeight = if (!isCaptureMode && !showMenu) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.clickable(
+                        enabled = !showMenu,
                         interactionSource = voiceModeInteraction,
                         indication = null
                     ) { selectControlMode(1) }
@@ -1084,6 +1084,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     fontSize = 13.sp,
                     fontWeight = if (showMenu) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.clickable(
+                        enabled = !showMenu,
                         interactionSource = moreModeInteraction,
                         indication = null
                     ) { if (showMenu) selectControlMode(1) else selectControlMode(2) }
@@ -1097,6 +1098,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             ) {
                 if (isCaptureMode) {
                     IconButton(
+                        enabled = !showMenu,
                         onClick = {
                             if (hasCameraPermission) captureAndUpload() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                         }
@@ -1113,6 +1115,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                         modifier = Modifier
                             .fillMaxSize()
                             .pointerInteropFilter { event ->
+                                if (showMenu) return@pointerInteropFilter true
                                 when (event.actionMasked) {
                                     MotionEvent.ACTION_DOWN -> {
                                         if (isRecognizingVoice) return@pointerInteropFilter true
