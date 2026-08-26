@@ -88,6 +88,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -562,6 +563,7 @@ fun MobileHistoryScreen(
     var showSkillMenu by remember { mutableStateOf(false) }
     val selectedSkill = uiState.selectedSkill
     val listState = rememberLazyListState()
+    val refreshState = rememberPullToRefreshState()
     HistoryAutoLoadMore(
         listState = listState,
         canLoadMore = uiState.historyCanLoadMore,
@@ -621,16 +623,25 @@ fun MobileHistoryScreen(
             PullToRefreshBox(
                 isRefreshing = uiState.isLoadingInvocations,
                 onRefresh = onRefresh,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                state = refreshState,
+                indicator = {
+                    PsopPullRefreshIndicator(
+                        state = refreshState,
+                        isRefreshing = uiState.isLoadingInvocations,
+                        color = MobileBlue
+                    )
+                }
             ) {
                 when {
-                    uiState.isLoadingInvocations -> Text("正在加载…", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
-                    selectedSkill == null -> Text("暂无可用作业技能", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
+                    uiState.isLoadingInvocations -> Text("正在加载…", color = Color(0xFF6B7688), modifier = Modifier.fillMaxWidth().padding(top = 36.dp))
+                    selectedSkill == null -> Text("暂无可用作业技能", color = Color(0xFF6B7688), modifier = Modifier.fillMaxWidth().padding(top = 36.dp))
                     uiState.invocations.isEmpty() -> {
                         val label = statuses.firstOrNull { it.first == uiState.runStatusFilter }?.second ?: "当前"
-                        Text("暂无${selectedSkill.name}的${label}记录", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
+                        Text("暂无${selectedSkill.name}的${label}记录", color = Color(0xFF6B7688), modifier = Modifier.fillMaxWidth().padding(top = 36.dp))
                     }
                     else -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
                         state = listState,
                         contentPadding = PaddingValues(top = 22.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
