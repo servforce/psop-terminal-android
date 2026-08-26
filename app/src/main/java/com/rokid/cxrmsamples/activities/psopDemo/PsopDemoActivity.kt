@@ -23,19 +23,7 @@ class PsopDemoActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val requestedMode = intent.getStringExtra(EXTRA_OPERATING_MODE)
-            ?.let { runCatching { PsopOperatingMode.valueOf(it) }.getOrNull() }
-        requestedMode?.let(viewModel::selectOperatingMode)
-
-        if (requestedMode != PsopOperatingMode.MOBILE) {
-            // Android 13+ 需动态申请 NEARBY_WIFI_DEVICES 权限（Wi-Fi P2P 设备发现必需）
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                requestPermissions(arrayOf(android.Manifest.permission.NEARBY_WIFI_DEVICES), 1024)
-            }
-            // 初始化离线 ASR 引擎（首次会从 assets 解压模型，约 2-3 秒）
-            viewModel.initAsrEngine()
-        }
+        applyRequestedMode(intent)
 
         setContent {
             // 使用 PSOP 专用固定浅色主题，不跟随系统深色模式与壁纸动态取色
@@ -57,6 +45,27 @@ class PsopDemoActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyRequestedMode(intent)
+    }
+
+    private fun applyRequestedMode(intent: Intent) {
+        val requestedMode = intent.getStringExtra(EXTRA_OPERATING_MODE)
+            ?.let { runCatching { PsopOperatingMode.valueOf(it) }.getOrNull() }
+        requestedMode?.let(viewModel::selectOperatingMode)
+
+        if (requestedMode != PsopOperatingMode.MOBILE) {
+            // Android 13+ 需动态申请 NEARBY_WIFI_DEVICES 权限（Wi-Fi P2P 设备发现必需）
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                requestPermissions(arrayOf(android.Manifest.permission.NEARBY_WIFI_DEVICES), 1024)
+            }
+            // 初始化离线 ASR 引擎（首次会从 assets 解压模型，约 2-3 秒）
+            viewModel.initAsrEngine()
         }
     }
 

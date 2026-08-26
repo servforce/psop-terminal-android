@@ -116,7 +116,9 @@ class BluetoothInitActivity : ComponentActivity() {
                 }, onStartInspection = {
                     startActivity(Intent(this, PsopDemoActivity::class.java).apply {
                         putExtra(PsopDemoActivity.EXTRA_OPERATING_MODE, PsopOperatingMode.GLASSES.name)
+                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                     })
+                    finish()
                 }, onBack = {
                     finish()
                 })
