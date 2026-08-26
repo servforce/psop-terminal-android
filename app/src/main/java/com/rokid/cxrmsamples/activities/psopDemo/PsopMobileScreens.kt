@@ -143,6 +143,7 @@ internal fun isMobileTaskActive(uiState: PsopDemoUiState): Boolean =
     uiState.isRunning && uiState.runStatus !in MobileTerminalRunStatuses
 
 private const val MOBILE_ASR_SAMPLE_RATE = 16_000
+private const val MOBILE_ASR_VOICE_RMS_THRESHOLD = 150.0
 
 private data class MobileAsrResult(val text: String? = null, val error: String? = null)
 
@@ -161,6 +162,9 @@ private class MobileOfflineAsrRecorder(context: Context) {
 
     @Volatile
     private var isCapturing = false
+
+    @Volatile
+    private var hasDetectedVoice = false
 
     @Suppress("MissingPermission")
     fun start(): String? {
@@ -191,6 +195,7 @@ private class MobileOfflineAsrRecorder(context: Context) {
         }
 
         synchronized(outputLock) { output = ByteArrayOutputStream() }
+        hasDetectedVoice = false
         audioRecord = recorder
         return try {
             recorder.startRecording()
@@ -206,6 +211,9 @@ private class MobileOfflineAsrRecorder(context: Context) {
                         val size = recorder.read(buffer, 0, buffer.size)
                         if (size > 0) {
                             synchronized(outputLock) { output.write(buffer, 0, size) }
+                            if (computePcm16Rms(buffer, size) > MOBILE_ASR_VOICE_RMS_THRESHOLD) {
+                                hasDetectedVoice = true
+                            }
                         } else if (size != AudioRecord.ERROR_INVALID_OPERATION && size != AudioRecord.ERROR_BAD_VALUE) {
                             Log.w("PsopMobileAsr", "AudioRecord read failed: $size")
                         }
@@ -234,6 +242,9 @@ private class MobileOfflineAsrRecorder(context: Context) {
         if (pcm.size < MOBILE_ASR_SAMPLE_RATE) {
             return@withContext MobileAsrResult(error = "说话时间太短，请按住再说一次")
         }
+        if (!hasDetectedVoice) {
+            return@withContext MobileAsrResult(error = "未检测到语音，请重试")
+        }
         val text = recognitionMutex.withLock {
             if (!SherpaAsrEngine.initialize(appContext)) return@withLock null
             SherpaAsrEngine.recognize(pcm).trim()
@@ -247,7 +258,7 @@ private class MobileOfflineAsrRecorder(context: Context) {
 
     suspend fun recognizeCurrentAudio(): String? = withContext(Dispatchers.IO) {
         val pcm = synchronized(outputLock) { output.toByteArray() }
-        if (pcm.size < MOBILE_ASR_SAMPLE_RATE) return@withContext null
+        if (pcm.size < MOBILE_ASR_SAMPLE_RATE || !hasDetectedVoice) return@withContext null
         recognitionMutex.withLock {
             if (!SherpaAsrEngine.initialize(appContext)) return@withLock null
             SherpaAsrEngine.recognize(pcm).trim().takeIf { it.isNotBlank() }
@@ -263,11 +274,25 @@ private class MobileOfflineAsrRecorder(context: Context) {
         captureJob?.cancel()
         captureJob = null
         synchronized(outputLock) { output = ByteArrayOutputStream() }
+        hasDetectedVoice = false
     }
 
     fun release() {
         cancelRecording()
         scope.cancel()
+    }
+
+    private fun computePcm16Rms(data: ByteArray, size: Int): Double {
+        var sum = 0.0
+        var sampleCount = 0
+        var index = 0
+        while (index + 1 < size) {
+            val sample = (data[index].toInt() and 0xFF) or (data[index + 1].toInt() shl 8)
+            sum += sample.toDouble() * sample
+            sampleCount++
+            index += 2
+        }
+        return if (sampleCount == 0) 0.0 else kotlin.math.sqrt(sum / sampleCount)
     }
 }
 
