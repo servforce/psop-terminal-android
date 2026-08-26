@@ -269,7 +269,7 @@ fun PsopModeSelectionScreen(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 42.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("PSOP 智能巡检", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("PSOP 智能作业", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("选择本次工作方式", color = Color(0xFF6B7688), style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(18.dp))
             ModeCard(
@@ -334,7 +334,7 @@ fun PsopMobileHomeScreen(
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("PSOP 智能巡检", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Text("PSOP 智能作业", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                     IconButton(onClick = onChangeMode) {
                         Icon(Icons.Default.SwapHoriz, contentDescription = "切换模式", tint = Color(0xFF6B7688))
                     }

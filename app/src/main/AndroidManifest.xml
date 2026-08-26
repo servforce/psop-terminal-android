@@ -51,7 +51,7 @@
         <activity
             android:name=".activities.psopDemo.PsopDemoActivity"
             android:exported="false"
-            android:label="PSOP 智能巡检"
+            android:label="PSOP 智能作业"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.CXRMSamples" />
         <activity
