@@ -255,7 +255,7 @@ fun PsopDemoScreen(
         )
         InspectionScreen.INTERACTION -> {
             if (uiState.operatingMode == PsopOperatingMode.MOBILE) {
-                if (uiState.runStatus in MobileActiveRunStatuses) {
+                if (isMobileTaskActive(uiState)) {
                     MobileArTaskScreen(viewModel = viewModel, uiState = uiState)
                 } else {
                     MobileTaskChatScreen(

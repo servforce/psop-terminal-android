@@ -131,7 +131,14 @@ import kotlinx.coroutines.withContext
 private val MobileBlue = Color(0xFF2E66E9)
 private val MobileModeAccent = Color(0xFFFF6900)
 private val ArOverlayGreen = Color(0xFF00E676)
-internal val MobileActiveRunStatuses = setOf("accepted", "running", "waiting_input")
+internal val MobileActiveRunStatuses = setOf(
+    "queued", "waiting_runtime", "accepted", "running", "waiting_input", "finalizing"
+)
+private val MobileTerminalRunStatuses = setOf("succeeded", "failed", "cancelled", "aborted")
+
+/** 新建任务在首个状态事件到达前 runStatus 为空，此时仍应保持可操作。 */
+internal fun isMobileTaskActive(uiState: PsopDemoUiState): Boolean =
+    uiState.isRunning && uiState.runStatus !in MobileTerminalRunStatuses
 
 private const val MOBILE_ASR_SAMPLE_RATE = 16_000
 
@@ -1249,7 +1256,7 @@ internal fun MobileTaskChatScreen(
 ) {
     var input by remember { mutableStateOf("") }
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
-    val isActiveMobileTask = uiState.runStatus in MobileActiveRunStatuses
+    val isActiveMobileTask = isMobileTaskActive(uiState)
     Scaffold(
         topBar = {
             TopAppBar(

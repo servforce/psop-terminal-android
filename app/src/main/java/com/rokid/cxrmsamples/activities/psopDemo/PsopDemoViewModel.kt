@@ -791,7 +791,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun isActiveRun(run: RunResponse): Boolean =
-        run.status in setOf("running", "waiting_input", "accepted")
+        run.status in setOf("queued", "waiting_runtime", "accepted", "running", "waiting_input", "finalizing")
 
     /** 新建或打开运行中任务时记录，首页“继续巡检”优先恢复该任务。 */
     private fun rememberLastOpenedActiveRun(runId: String) {
@@ -1869,7 +1869,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 loadTaskStatus(runId)
 
                 // 如果还在运行中，连接 WebSocket 继续会话
-                val activeStates = setOf("running", "waiting_input", "accepted")
+                val activeStates = setOf("queued", "waiting_runtime", "accepted", "running", "waiting_input", "finalizing")
                 if (invocation.status in activeStates) {
                     repository.connectWebSocket(runId)
                     // 立即同步 Run 真实状态（invocation.status 可能只是 "running"，实际 run 可能已是 "waiting_input"）
