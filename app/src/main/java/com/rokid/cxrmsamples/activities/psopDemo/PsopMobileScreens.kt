@@ -1008,7 +1008,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                         color = Color(0xFF172A44),
                         shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(1.dp, Color(0xFF37526F)),
-                        modifier = Modifier.weight(1f).height(58.dp).clip(RoundedCornerShape(16.dp)).clickable {
+                        modifier = Modifier.fillMaxWidth().height(58.dp).clip(RoundedCornerShape(16.dp)).clickable {
                             showMenu = false
                             showChat = true
                         }
@@ -1022,28 +1022,6 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                             Column {
                                 Text("AI 对话", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                 Text("描述问题", color = Color(0xFFAFC2D9), fontSize = 11.sp)
-                            }
-                        }
-                    }
-                    Surface(
-                        color = Color(0xFF172A44),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, Color(0xFF37526F)),
-                        modifier = Modifier.weight(1f).height(58.dp).clip(RoundedCornerShape(16.dp)).clickable {
-                            showMenu = false
-                            isCaptureMode = true
-                            captureStatus = "请对准异常区域后拍摄"
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color(0xFF9EC1FF), modifier = Modifier.size(19.dp))
-                            Column {
-                                Text("异常处理", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text("拍摄异常", color = Color(0xFFAFC2D9), fontSize = 11.sp)
                             }
                         }
                     }
