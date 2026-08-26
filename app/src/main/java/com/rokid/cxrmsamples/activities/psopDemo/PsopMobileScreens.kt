@@ -974,36 +974,6 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     .background(Color.Black.copy(alpha = 0.42f))
                     .clickable { showMenu = false }
             )
-            Surface(
-                color = Color(0xF2172A44),
-                shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(1.dp, Color(0xFF37526F)),
-                shadowElevation = 10.dp,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 126.dp)
-                    .clickable { showMenu = false; showChat = true }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(MobileBlue.copy(alpha = 0.26f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF9EC1FF), modifier = Modifier.size(17.dp))
-                    }
-                    Column {
-                        Text("AI 对话", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text("描述现场问题，获取操作建议", color = Color(0xFFAFC2D9), fontSize = 11.sp)
-                    }
-                }
-            }
         }
         captureStatus?.let { status ->
             Surface(
@@ -1029,12 +999,67 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 .padding(top = 14.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                modifier = Modifier
-                    .offset(x = selectedModeOffset)
-                    .padding(bottom = 12.dp)
-                    .then(
-                        if (showMenu) Modifier else Modifier.pointerInput(isCaptureMode) {
+            if (showMenu) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        color = Color(0xFF172A44),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFF37526F)),
+                        modifier = Modifier.weight(1f).height(58.dp).clip(RoundedCornerShape(16.dp)).clickable {
+                            showMenu = false
+                            showChat = true
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF9EC1FF), modifier = Modifier.size(19.dp))
+                            Column {
+                                Text("AI 对话", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text("描述问题", color = Color(0xFFAFC2D9), fontSize = 11.sp)
+                            }
+                        }
+                    }
+                    Surface(
+                        color = Color(0xFF172A44),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFF37526F)),
+                        modifier = Modifier.weight(1f).height(58.dp).clip(RoundedCornerShape(16.dp)).clickable {
+                            showMenu = false
+                            isCaptureMode = true
+                            captureStatus = "请对准异常区域后拍摄"
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color(0xFF9EC1FF), modifier = Modifier.size(19.dp))
+                            Column {
+                                Text("异常处理", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text("拍摄异常", color = Color(0xFFAFC2D9), fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+                Text(
+                    "收起",
+                    color = Color(0xFFB8C4D6),
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).clickable { showMenu = false }.padding(horizontal = 14.dp, vertical = 5.dp)
+                )
+            } else {
+                Row(
+                    modifier = Modifier
+                        .offset(x = selectedModeOffset)
+                        .padding(bottom = 12.dp)
+                        .pointerInput(isCaptureMode) {
                             detectHorizontalDragGestures(
                                 onDragStart = { modeSwipeDistance = 0f },
                                 onHorizontalDrag = { _, dragAmount ->
@@ -1052,114 +1077,99 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                                 },
                                 onDragCancel = { modeSwipeDistance = 0f }
                             )
+                        },
+                    horizontalArrangement = Arrangement.spacedBy(26.dp)
+                ) {
+                    Text(
+                        "拍摄",
+                        color = if (isCaptureMode) MobileModeAccent else Color(0xFFB8C4D6),
+                        fontSize = 13.sp,
+                        fontWeight = if (isCaptureMode) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.clickable(interactionSource = captureModeInteraction, indication = null) { selectControlMode(0) }
+                    )
+                    Text(
+                        "语音",
+                        color = if (!isCaptureMode) MobileModeAccent else Color(0xFFB8C4D6),
+                        fontSize = 13.sp,
+                        fontWeight = if (!isCaptureMode) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.clickable(interactionSource = voiceModeInteraction, indication = null) { selectControlMode(1) }
+                    )
+                    Text(
+                        "更多",
+                        color = Color(0xFFB8C4D6),
+                        fontSize = 13.sp,
+                        modifier = Modifier.clickable(interactionSource = moreModeInteraction, indication = null) { selectControlMode(2) }
+                    )
+                }
+                Surface(
+                    shape = CircleShape,
+                    color = if (isCaptureMode) Color.White else if (isListening) Color.White else MobileBlue,
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.size(62.dp)
+                ) {
+                    if (isCaptureMode) {
+                        IconButton(
+                            onClick = {
+                                if (hasCameraPermission) captureAndUpload() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = "拍摄并校验",
+                                tint = MobileBlue
+                            )
                         }
-                    ),
-                horizontalArrangement = Arrangement.spacedBy(26.dp)
-            ) {
-                Text(
-                    "拍摄",
-                    color = if (isCaptureMode && !showMenu) MobileModeAccent else Color(0xFFB8C4D6),
-                    fontSize = 13.sp,
-                    fontWeight = if (isCaptureMode && !showMenu) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.clickable(
-                        enabled = !showMenu,
-                        interactionSource = captureModeInteraction,
-                        indication = null
-                    ) { selectControlMode(0) }
-                )
-                Text(
-                    "语音",
-                    color = if (!isCaptureMode && !showMenu) MobileModeAccent else Color(0xFFB8C4D6),
-                    fontSize = 13.sp,
-                    fontWeight = if (!isCaptureMode && !showMenu) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.clickable(
-                        enabled = !showMenu,
-                        interactionSource = voiceModeInteraction,
-                        indication = null
-                    ) { selectControlMode(1) }
-                )
-                Text(
-                    "更多",
-                    color = if (showMenu) MobileModeAccent else Color(0xFFB8C4D6),
-                    fontSize = 13.sp,
-                    fontWeight = if (showMenu) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.clickable(
-                        enabled = !showMenu,
-                        interactionSource = moreModeInteraction,
-                        indication = null
-                    ) { if (showMenu) selectControlMode(1) else selectControlMode(2) }
-                )
-            }
-            Surface(
-                shape = CircleShape,
-                color = if (isCaptureMode) Color.White else if (isListening) Color.White else MobileBlue,
-                shadowElevation = 8.dp,
-                modifier = Modifier.size(62.dp)
-            ) {
-                if (isCaptureMode) {
-                    IconButton(
-                        enabled = !showMenu,
-                        onClick = {
-                            if (hasCameraPermission) captureAndUpload() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    } else {
+                        val cancelDistancePx = with(LocalDensity.current) { 72.dp.toPx() }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInteropFilter { event ->
+                                    when (event.actionMasked) {
+                                        MotionEvent.ACTION_DOWN -> {
+                                            if (isRecognizingVoice) return@pointerInteropFilter true
+                                            if (!hasMicrophonePermission) {
+                                                currentRequestMicrophonePermission()
+                                            } else {
+                                                voiceTouchStartY = event.y
+                                                currentStartVoice()
+                                            }
+                                            true
+                                        }
+                                        MotionEvent.ACTION_MOVE -> {
+                                            if (currentIsListening) {
+                                                currentUpdateVoiceCancelHint(event.y < voiceTouchStartY - cancelDistancePx)
+                                            }
+                                            true
+                                        }
+                                        MotionEvent.ACTION_UP -> {
+                                            if (currentIsListening) {
+                                                if (currentIsVoiceCancelArmed) currentCancelVoice() else currentStopVoice()
+                                            }
+                                            true
+                                        }
+                                        MotionEvent.ACTION_CANCEL -> {
+                                            if (currentIsListening) currentCancelVoice()
+                                            true
+                                        }
+                                        else -> true
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isListening) ListeningVoiceWaves()
+                            Icon(
+                                imageVector = if (isListening) Icons.Default.Stop else Icons.Default.KeyboardVoice,
+                                contentDescription = if (isListening) "松开发送" else "按住语音助手",
+                                tint = if (isListening) MobileBlue else Color.White
+                            )
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CameraAlt,
-                            contentDescription = "拍摄并校验",
-                            tint = MobileBlue
-                        )
-                    }
-                } else {
-                    val cancelDistancePx = with(LocalDensity.current) { 72.dp.toPx() }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInteropFilter { event ->
-                                if (showMenu) return@pointerInteropFilter true
-                                when (event.actionMasked) {
-                                    MotionEvent.ACTION_DOWN -> {
-                                        if (isRecognizingVoice) return@pointerInteropFilter true
-                                        if (!hasMicrophonePermission) {
-                                            currentRequestMicrophonePermission()
-                                        } else {
-                                            voiceTouchStartY = event.y
-                                            currentStartVoice()
-                                        }
-                                        true
-                                    }
-                                    MotionEvent.ACTION_MOVE -> {
-                                        if (currentIsListening) {
-                                            currentUpdateVoiceCancelHint(event.y < voiceTouchStartY - cancelDistancePx)
-                                        }
-                                        true
-                                    }
-                                    MotionEvent.ACTION_UP -> {
-                                        if (currentIsListening) {
-                                            if (currentIsVoiceCancelArmed) currentCancelVoice() else currentStopVoice()
-                                        }
-                                        true
-                                    }
-                                    MotionEvent.ACTION_CANCEL -> {
-                                        if (currentIsListening) currentCancelVoice()
-                                        true
-                                    }
-                                    else -> true
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isListening) ListeningVoiceWaves()
-                        Icon(
-                            imageVector = if (isListening) Icons.Default.Stop else Icons.Default.KeyboardVoice,
-                            contentDescription = if (isListening) "松开发送" else "按住语音助手",
-                            tint = if (isListening) MobileBlue else Color.White
-                        )
                     }
                 }
             }
+            }
         }
     }
-}
 
 @Composable
 private fun ArAiReplyCard(text: String, modifier: Modifier = Modifier) {
