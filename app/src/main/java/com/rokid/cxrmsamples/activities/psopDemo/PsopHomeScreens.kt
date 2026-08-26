@@ -226,17 +226,63 @@ fun HomeShortcut(label: String, icon: androidx.compose.ui.graphics.vector.ImageV
 
 @Composable
 fun HomeRecentRunCard(run: RunResponse, uiState: PsopDemoUiState, onResumeRun: (RunResponse) -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val copyInteraction = remember { MutableInteractionSource() }
+    val progress = uiState.historyProgressByRunId[run.id]
     Surface(shape = RoundedCornerShape(24.dp), color = Color.White, modifier = Modifier.fillMaxWidth().clickable { onResumeRun(run) }) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(skillName(run, uiState), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                StatusChip(historyStatusLabel(run.status), run.status)
             }
             Text(
-                formatRunDate(run.updatedAt.ifBlank { run.createdAt }),
+                historyCardTitle(run, progress),
                 color = PsopSecondary,
-                modifier = Modifier.padding(top = 12.dp)
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 8.dp)
             )
+            progress?.let { currentProgress ->
+                if (currentProgress.total > 0) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("作业进度", color = PsopSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Text(
+                            "${currentProgress.completed} / ${currentProgress.total} · ${currentProgress.percent}%",
+                            color = PsopBlue,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { currentProgress.percent.coerceIn(0, 100) / 100f },
+                        modifier = Modifier.fillMaxWidth().padding(top = 7.dp).height(6.dp),
+                        color = PsopBlue,
+                        trackColor = PsopSoftBlue
+                    )
+                }
+            }
+            Text(
+                "${historyTimeLabel(run)} ${formatRunDate(if (isActiveHistoryRun(run)) run.createdAt else run.updatedAt)}",
+                color = PsopSecondary,
+                modifier = Modifier.padding(top = if ((progress?.total ?: 0) > 0) 12.dp else 18.dp)
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .padding(top = 10.dp, bottom = 4.dp)
+                    .clickable(
+                        interactionSource = copyInteraction,
+                        indication = null
+                    ) {
+                        clipboard.setText(AnnotatedString(run.id))
+                        Toast.makeText(context, "已复制编号：…${run.id.takeLast(8)}", Toast.LENGTH_SHORT).show()
+                    }
+            ) {
+                Icon(Icons.Default.ContentCopy, contentDescription = "复制编号", tint = PsopBlue, modifier = Modifier.size(16.dp))
+                Text("复制编号", color = PsopBlue, fontSize = 13.sp, modifier = Modifier.padding(start = 5.dp))
+            }
         }
     }
 }
