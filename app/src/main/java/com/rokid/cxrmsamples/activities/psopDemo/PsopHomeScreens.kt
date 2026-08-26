@@ -415,12 +415,21 @@ internal fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunCli
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     val copyInteraction = remember { MutableInteractionSource() }
+    val progress = uiState.historyProgressByRunId[run.id]
     Surface(shape = RoundedCornerShape(24.dp), color = Color.White, modifier = Modifier.fillMaxWidth().clickable { onRunClicked(run) }) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(skillName(run, uiState), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text(historyCardTitle(run), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             }
-            uiState.historyProgressByRunId[run.id]?.let { progress ->
+            historyCardSubtitle(run)?.let { subtitle ->
+                Text(
+                    subtitle,
+                    color = PsopSecondary,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 7.dp)
+                )
+            }
+            progress?.let { progress ->
                 if (progress.total > 0) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
@@ -443,10 +452,14 @@ internal fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunCli
                 }
             }
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = if ((progress?.total ?: 0) > 0) 12.dp else 18.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(formatRunDate(run.createdAt), color = PsopSecondary, modifier = Modifier.weight(1f))
+                Text(
+                    "${historyTimeLabel(run)} ${formatRunDate(if (isActiveHistoryRun(run)) run.createdAt else run.updatedAt)}",
+                    color = PsopSecondary,
+                    modifier = Modifier.weight(1f)
+                )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -486,6 +499,28 @@ private fun StatusChip(label: String, status: String) {
 
 private fun skillName(run: RunResponse, state: PsopDemoUiState): String =
     state.skills.find { it.id == run.skillDefinitionId }?.name ?: run.currentStep ?: "巡检任务"
+
+private fun isActiveHistoryRun(run: RunResponse): Boolean = run.status in setOf(
+    "queued", "waiting_runtime", "accepted", "running", "waiting_input", "finalizing"
+)
+
+private fun historyCardTitle(run: RunResponse): String = when {
+    isActiveHistoryRun(run) -> run.currentStep?.takeIf { it.isNotBlank() } ?: "正在进行作业"
+    run.status == "succeeded" -> "本次作业已完成"
+    run.status == "cancelled" -> "任务已取消"
+    run.status == "aborted" || run.status == "failed" -> "任务已中止"
+    else -> "作业记录"
+}
+
+private fun historyCardSubtitle(run: RunResponse): String? = when {
+    isActiveHistoryRun(run) -> "正在进行"
+    (run.status == "aborted" || run.status == "failed") && !run.currentStep.isNullOrBlank() ->
+        "中止于：${run.currentStep}"
+    else -> null
+}
+
+private fun historyTimeLabel(run: RunResponse): String =
+    if (isActiveHistoryRun(run)) "开始时间" else if (run.status == "succeeded") "完成时间" else "结束时间"
 
 private fun formatRunDate(value: String): String {
     val normalized = value.replace("T", " ").substringBefore(".")
