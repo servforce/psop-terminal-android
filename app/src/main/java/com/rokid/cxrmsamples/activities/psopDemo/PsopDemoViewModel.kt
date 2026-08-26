@@ -155,6 +155,8 @@ data class PsopDemoUiState(
     val historyTotalPages: Int = 0,
     val historyCanLoadMore: Boolean = false,
     val isLoadingMoreHistory: Boolean = false,
+    /** 下拉刷新时保留当前列表，仅在筛选条下显示轻量加载反馈。 */
+    val isRefreshingHistory: Boolean = false,
     val taskStatus: TaskStatusResponse? = null,  // 任务进度状态
     val isTtsPlaying: Boolean = false,  // 眼镜端 TTS 是否正在播报（用于显示"停止播报"按钮）
     /** 手机端离线播报的完成序号，仅供手机 AR 提示卡在播报结束后自动收起。 */
@@ -797,7 +799,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     /** 手机端历史记录始终绑定一个作业技能，不请求全部技能的运行记录。 */
-    private fun openMobileHistory(status: String, page: Int) {
+    private fun openMobileHistory(status: String, page: Int, isPullRefresh: Boolean = false) {
         val requestVersion = ++historyRequestVersion
         val append = page > 1
         _uiState.update {
@@ -805,8 +807,9 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 currentScreen = InspectionScreen.HISTORY,
                 runStatusFilter = status,
                 runListScope = RunListScope.ALL,
-                isLoadingInvocations = !append,
+                isLoadingInvocations = !append && !isPullRefresh,
                 isLoadingMoreHistory = append,
+                isRefreshingHistory = isPullRefresh,
                 error = null
             )
         }
@@ -833,6 +836,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                         invocations = if (append) it.invocations.mergeHistoryRuns(runs) else runs,
                         isLoadingInvocations = false,
                         isLoadingMoreHistory = false,
+                        isRefreshingHistory = false,
                         historyPage = result?.page ?: 1,
                         historyTotalPages = result?.totalPages ?: 0,
                         historyCanLoadMore = result?.let { it.page < it.totalPages } == true
@@ -845,6 +849,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                     it.copy(
                         isLoadingInvocations = false,
                         isLoadingMoreHistory = false,
+                        isRefreshingHistory = false,
                         error = "加载历史记录失败: ${e.message}"
                     )
                 }
@@ -858,7 +863,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     /** 历史记录下拉刷新从第一页开始；滚动到底时仅追加下一页。 */
-    fun refreshHistory() = loadHistoryPage(1)
+    fun refreshHistory() = loadHistoryPage(1, isPullRefresh = true)
 
     fun loadNextHistoryPage() {
         val state = _uiState.value
@@ -866,12 +871,12 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         loadHistoryPage(state.historyPage + 1)
     }
 
-    private fun loadHistoryPage(page: Int) {
+    private fun loadHistoryPage(page: Int, isPullRefresh: Boolean = false) {
         val state = _uiState.value
         if (state.operatingMode == PsopOperatingMode.MOBILE) {
-            openMobileHistory(state.runStatusFilter, page)
+            openMobileHistory(state.runStatusFilter, page, isPullRefresh)
         } else {
-            loadAllRuns(state.runStatusFilter, page)
+            loadAllRuns(state.runStatusFilter, page, isPullRefresh)
         }
     }
 
@@ -978,14 +983,19 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun loadAllRuns(status: String = _uiState.value.runStatusFilter, page: Int = 1) {
+    fun loadAllRuns(
+        status: String = _uiState.value.runStatusFilter,
+        page: Int = 1,
+        isPullRefresh: Boolean = false
+    ) {
         val requestVersion = ++historyRequestVersion
         val append = page > 1
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
-                    isLoadingInvocations = !append,
+                    isLoadingInvocations = !append && !isPullRefresh,
                     isLoadingMoreHistory = append,
+                    isRefreshingHistory = isPullRefresh,
                     runStatusFilter = status
                 )
             }
@@ -1006,6 +1016,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                         invocations = if (append) it.invocations.mergeHistoryRuns(runs) else runs,
                         isLoadingInvocations = false,
                         isLoadingMoreHistory = false,
+                        isRefreshingHistory = false,
                         historyPage = result.page,
                         historyTotalPages = result.totalPages,
                         historyCanLoadMore = result.page < result.totalPages
@@ -1018,6 +1029,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                     it.copy(
                         isLoadingInvocations = false,
                         isLoadingMoreHistory = false,
+                        isRefreshingHistory = false,
                         error = "加载历史记录失败: ${e.message}"
                     )
                 }

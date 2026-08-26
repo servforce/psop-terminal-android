@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -30,7 +29,6 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -44,8 +42,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshState
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -53,7 +49,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -258,7 +253,6 @@ fun PsopHistoryScreen(
     BackHandler(onBack = onBack)
     val statuses = listOf("running" to "运行中", "succeeded" to "已完成", "aborted" to "已中止", "cancelled" to "已取消")
     val listState = rememberLazyListState()
-    val refreshState = rememberPullToRefreshState()
     HistoryAutoLoadMore(
         listState = listState,
         canLoadMore = uiState.historyCanLoadMore,
@@ -283,18 +277,14 @@ fun PsopHistoryScreen(
                     }
                 }
             }
+            if (uiState.isRefreshingHistory) {
+                HistoryLoadingIndicator(color = PsopBlue)
+            }
             PullToRefreshBox(
-                isRefreshing = uiState.isLoadingInvocations,
+                isRefreshing = uiState.isRefreshingHistory,
                 onRefresh = onRefresh,
                 modifier = Modifier.fillMaxWidth().weight(1f),
-                state = refreshState,
-                indicator = {
-                    PsopPullRefreshIndicator(
-                        state = refreshState,
-                        isRefreshing = uiState.isLoadingInvocations,
-                        color = PsopBlue
-                    )
-                }
+                indicator = {}
             ) {
                 when {
                     uiState.isLoadingInvocations -> Text("正在加载…", color = PsopSecondary, modifier = Modifier.fillMaxWidth().padding(top = 36.dp))
@@ -312,35 +302,6 @@ fun PsopHistoryScreen(
                     }
                 }
             }
-        }
-    }
-}
-
-/** 下拉时只保留品牌蓝色的轻量反馈，不使用 Material 默认的悬浮圆形按钮。 */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-@Composable
-internal fun BoxScope.PsopPullRefreshIndicator(
-    state: PullToRefreshState,
-    isRefreshing: Boolean,
-    color: Color
-) {
-    val distance = state.distanceFraction.coerceIn(0f, 1f)
-    if (!isRefreshing && distance <= 0f) return
-
-    Box(
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .padding(top = 10.dp)
-            .graphicsLayer {
-                alpha = if (isRefreshing) 1f else distance
-                rotationZ = if (isRefreshing) 0f else distance * 180f
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        if (isRefreshing) {
-            CircularProgressIndicator(color = color, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-        } else {
-            Icon(Icons.Default.Refresh, contentDescription = "下拉刷新", tint = color, modifier = Modifier.size(20.dp))
         }
     }
 }
