@@ -451,19 +451,17 @@ internal fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunCli
                     )
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = if ((progress?.total ?: 0) > 0) 12.dp else 18.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(top = if ((progress?.total ?: 0) > 0) 12.dp else 18.dp)
             ) {
                 Text(
                     "${historyTimeLabel(run)} ${formatRunDate(if (isActiveHistoryRun(run)) run.createdAt else run.updatedAt)}",
-                    color = PsopSecondary,
-                    modifier = Modifier.weight(1f)
+                    color = PsopSecondary
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+                        .padding(top = 10.dp, bottom = 4.dp)
                         .clickable(
                             interactionSource = copyInteraction,
                             indication = null
