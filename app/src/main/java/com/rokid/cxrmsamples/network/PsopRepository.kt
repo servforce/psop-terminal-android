@@ -138,11 +138,13 @@ class PsopRepository {
     suspend fun listSkills(): List<SkillSummaryResponse> {
         val response = api.listSkills(isPublished = "true")
         val listType = object : TypeToken<List<SkillSummaryResponse>>() {}.type
-        return gson.fromJson(response.unwrapSkillList(), listType)
+        return gson.fromJson(response.unwrapResponseList("技能列表"), listType)
     }
 
     suspend fun listRuns(skillId: String? = null, status: List<String>? = null): List<RunResponse> {
-        return api.listRuns(skillId = skillId, status = status)
+        val response = api.listRuns(skillId = skillId, status = status)
+        val listType = object : TypeToken<List<RunResponse>>() {}.type
+        return gson.fromJson(response.unwrapResponseList("运行记录"), listType)
     }
 }
 
@@ -150,9 +152,9 @@ class PsopRepository {
  * 兼容旧数组格式，以及服务端统一响应包装后的技能列表。
  * 例如 [{...}]、{"items":[...]}、{"data":[...]}。
  */
-private fun JsonElement.unwrapSkillList(): JsonElement {
+private fun JsonElement.unwrapResponseList(responseName: String): JsonElement {
     if (isJsonArray) return this
-    if (!isJsonObject) throw IllegalStateException("技能列表返回格式无效")
+    if (!isJsonObject) throw IllegalStateException("${responseName}返回格式无效")
 
     val keys = listOf("items", "data", "skills", "results")
     val root = asJsonObject
@@ -167,5 +169,5 @@ private fun JsonElement.unwrapSkillList(): JsonElement {
             }
         }
     }
-    throw IllegalStateException("技能列表响应中未找到数组数据")
+    throw IllegalStateException("${responseName}响应中未找到数组数据")
 }
