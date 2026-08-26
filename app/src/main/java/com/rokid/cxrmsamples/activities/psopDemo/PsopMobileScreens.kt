@@ -712,16 +712,11 @@ fun PsopMobileHomeScreen(
 
 @Composable
 fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
-    var showMenu by remember { mutableStateOf(false) }
     var showChat by rememberSaveable { mutableStateOf(false) }
     var isCaptureMode by rememberSaveable { mutableStateOf(false) }
     var modeSwipeDistance by remember { mutableFloatStateOf(0f) }
     val selectedModeOffset by animateDpAsState(
-        targetValue = when {
-            showMenu -> (-52).dp
-            isCaptureMode -> 52.dp
-            else -> 0.dp
-        },
+        targetValue = if (isCaptureMode) 52.dp else 0.dp,
         label = "mobileModeAlignment"
     )
     var captureStatus by remember { mutableStateOf<String?>(null) }
@@ -730,7 +725,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var arAiReply by remember { mutableStateOf<String?>(null) }
     val voiceModeInteraction = remember { MutableInteractionSource() }
     val captureModeInteraction = remember { MutableInteractionSource() }
-    val moreModeInteraction = remember { MutableInteractionSource() }
+    val conversationModeInteraction = remember { MutableInteractionSource() }
     var captureFrame by remember { mutableStateOf<(() -> Bitmap?)?>(null) }
     var showCaptureFeedback by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -911,13 +906,10 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         when (index) {
             0 -> {
                 isCaptureMode = true
-                showMenu = false
             }
             1 -> {
                 isCaptureMode = false
-                showMenu = false
             }
-            else -> showMenu = true
         }
     }
 
@@ -940,7 +932,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         if (hasCameraPermission) {
             MobileCameraPreview(
                 onCaptureFrameAvailable = { captureFrame = it },
-                modifier = if (showMenu) Modifier.fillMaxSize().blur(12.dp) else Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize()
             )
         } else {
             CameraPermissionContent(onRequestPermission = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) })
@@ -967,14 +959,6 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 modifier = Modifier.align(Alignment.TopCenter).padding(start = 20.dp, end = 20.dp, top = 28.dp)
             )
         }
-        if (showMenu) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.42f))
-                    .clickable { showMenu = false }
-            )
-        }
         captureStatus?.let { status ->
             Surface(
                 color = Color(0xD9162A44),
@@ -999,41 +983,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 .padding(top = 14.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (showMenu) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Surface(
-                        color = Color(0xFF172A44),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, Color(0xFF37526F)),
-                        modifier = Modifier.fillMaxWidth().height(58.dp).clip(RoundedCornerShape(16.dp)).clickable {
-                            showMenu = false
-                            showChat = true
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF9EC1FF), modifier = Modifier.size(19.dp))
-                            Column {
-                                Text("AI 对话", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text("描述问题", color = Color(0xFFAFC2D9), fontSize = 11.sp)
-                            }
-                        }
-                    }
-                }
-                Text(
-                    "收起",
-                    color = Color(0xFFB8C4D6),
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).clickable { showMenu = false }.padding(horizontal = 14.dp, vertical = 5.dp)
-                )
-            } else {
-                Row(
+            Row(
                     modifier = Modifier
                         .offset(x = selectedModeOffset)
                         .padding(bottom = 12.dp)
@@ -1047,7 +997,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                                     val currentIndex = if (isCaptureMode) 0 else 1
                                     when {
                                         modeSwipeDistance <= -modeSwipeThresholdPx ->
-                                            selectControlMode((currentIndex + 1).coerceAtMost(2))
+                                            selectControlMode((currentIndex + 1).coerceAtMost(1))
                                         modeSwipeDistance >= modeSwipeThresholdPx ->
                                             selectControlMode((currentIndex - 1).coerceAtLeast(0))
                                     }
@@ -1073,17 +1023,18 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                         modifier = Modifier.clickable(interactionSource = voiceModeInteraction, indication = null) { selectControlMode(1) }
                     )
                     Text(
-                        "更多",
+                        "会话",
                         color = Color(0xFFB8C4D6),
                         fontSize = 13.sp,
-                        modifier = Modifier.clickable(interactionSource = moreModeInteraction, indication = null) { selectControlMode(2) }
+                        modifier = Modifier.clickable(interactionSource = conversationModeInteraction, indication = null) { showChat = true }
                     )
                 }
+            Box(modifier = Modifier.fillMaxWidth()) {
                 Surface(
                     shape = CircleShape,
                     color = if (isCaptureMode) Color.White else if (isListening) Color.White else MobileBlue,
                     shadowElevation = 8.dp,
-                    modifier = Modifier.size(62.dp)
+                    modifier = Modifier.size(62.dp).align(Alignment.Center)
                 ) {
                     if (isCaptureMode) {
                         IconButton(
@@ -1142,6 +1093,16 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                                 tint = if (isListening) MobileBlue else Color.White
                             )
                         }
+                    }
+                }
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF172A44),
+                    border = BorderStroke(1.dp, Color(0xFF37526F)),
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 38.dp).size(46.dp).clip(CircleShape).clickable { showChat = true }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Send, contentDescription = "进入会话", tint = Color(0xFF9EC1FF), modifier = Modifier.size(21.dp))
                     }
                 }
             }
