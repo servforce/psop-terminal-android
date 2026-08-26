@@ -150,6 +150,11 @@ data class PsopDemoUiState(
     val isLoadingInvocations: Boolean = false,
     val runStatusFilter: String = "running",
     val runListScope: RunListScope = RunListScope.SKILL,
+    /** 历史记录采用每页五条的服务端分页；页面端仅做下拉刷新和滚动续载。 */
+    val historyPage: Int = 1,
+    val historyTotalPages: Int = 0,
+    val historyCanLoadMore: Boolean = false,
+    val isLoadingMoreHistory: Boolean = false,
     val taskStatus: TaskStatusResponse? = null,  // 任务进度状态
     val isTtsPlaying: Boolean = false,  // 眼镜端 TTS 是否正在播报（用于显示"停止播报"按钮）
     /** 手机端离线播报的完成序号，仅供手机 AR 提示卡在播报结束后自动收起。 */
@@ -164,6 +169,7 @@ data class PsopDemoUiState(
 
 class PsopDemoViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = PsopRepository()
+    private var historyRequestVersion = 0L
 
     private val _uiState = MutableStateFlow(PsopDemoUiState())
     val uiState: StateFlow<PsopDemoUiState> = _uiState.asStateFlow()
@@ -176,6 +182,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         private const val TAG = "PsopDemoVM"
+        private const val HISTORY_PAGE_SIZE = 5
         private val TERMINAL_STATES = setOf("succeeded", "failed", "cancelled", "aborted")
         private const val HOME_RUN_PREFERENCES = "psop_home_run"
         private const val LAST_OPENED_ACTIVE_RUN_ID = "last_opened_active_run_id"
@@ -775,7 +782,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
 
     fun openHistory(status: String = "running") {
         if (_uiState.value.operatingMode == PsopOperatingMode.MOBILE) {
-            openMobileHistory(status)
+            openMobileHistory(status, page = 1)
             return
         }
         _uiState.update {
@@ -786,17 +793,20 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 error = null
             )
         }
-        loadAllRuns(status)
+        loadAllRuns(status, page = 1)
     }
 
     /** 手机端历史记录始终绑定一个作业技能，不请求全部技能的运行记录。 */
-    private fun openMobileHistory(status: String) {
+    private fun openMobileHistory(status: String, page: Int) {
+        val requestVersion = ++historyRequestVersion
+        val append = page > 1
         _uiState.update {
             it.copy(
                 currentScreen = InspectionScreen.HISTORY,
                 runStatusFilter = status,
                 runListScope = RunListScope.ALL,
-                isLoadingInvocations = true,
+                isLoadingInvocations = !append,
+                isLoadingMoreHistory = append,
                 error = null
             )
         }
@@ -806,22 +816,35 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 val selectedId = _uiState.value.selectedSkill?.id
                 val selectedSkill = availableSkills.firstOrNull { it.id == selectedId }
                     ?: availableSkills.firstOrNull()
-                val runs = selectedSkill?.let {
-                    repository.listRuns(it.id, statusListFor(status))
-                }.orEmpty()
+                val result = selectedSkill?.let {
+                    repository.listRunsPage(
+                        skillId = it.id,
+                        status = statusListFor(status),
+                        page = page,
+                        pageSize = HISTORY_PAGE_SIZE
+                    )
+                }
+                if (requestVersion != historyRequestVersion) return@launch
+                val runs = result?.items.orEmpty()
                 _uiState.update {
                     it.copy(
                         skills = availableSkills,
                         selectedSkill = selectedSkill,
-                        invocations = runs,
-                        isLoadingInvocations = false
+                        invocations = if (append) it.invocations.mergeHistoryRuns(runs) else runs,
+                        isLoadingInvocations = false,
+                        isLoadingMoreHistory = false,
+                        historyPage = result?.page ?: 1,
+                        historyTotalPages = result?.totalPages ?: 0,
+                        historyCanLoadMore = result?.let { it.page < it.totalPages } == true
                     )
                 }
             } catch (e: Exception) {
+                if (requestVersion != historyRequestVersion) return@launch
                 Log.e(TAG, "Failed to load mobile history", e)
                 _uiState.update {
                     it.copy(
                         isLoadingInvocations = false,
+                        isLoadingMoreHistory = false,
                         error = "加载历史记录失败: ${e.message}"
                     )
                 }
@@ -831,7 +854,25 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
 
     fun selectMobileHistorySkill(skill: SkillSummaryResponse) {
         _uiState.update { it.copy(selectedSkill = skill, error = null) }
-        loadRuns(skill.id, _uiState.value.runStatusFilter)
+        openMobileHistory(_uiState.value.runStatusFilter, page = 1)
+    }
+
+    /** 历史记录下拉刷新从第一页开始；滚动到底时仅追加下一页。 */
+    fun refreshHistory() = loadHistoryPage(1)
+
+    fun loadNextHistoryPage() {
+        val state = _uiState.value
+        if (!state.historyCanLoadMore || state.isLoadingInvocations || state.isLoadingMoreHistory) return
+        loadHistoryPage(state.historyPage + 1)
+    }
+
+    private fun loadHistoryPage(page: Int) {
+        val state = _uiState.value
+        if (state.operatingMode == PsopOperatingMode.MOBILE) {
+            openMobileHistory(state.runStatusFilter, page)
+        } else {
+            loadAllRuns(state.runStatusFilter, page)
+        }
     }
 
     private fun statusListFor(status: String?): List<String>? = when (status) {
@@ -937,25 +978,49 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun loadAllRuns(status: String = _uiState.value.runStatusFilter) {
+    fun loadAllRuns(status: String = _uiState.value.runStatusFilter, page: Int = 1) {
+        val requestVersion = ++historyRequestVersion
+        val append = page > 1
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingInvocations = true, runStatusFilter = status) }
+            _uiState.update {
+                it.copy(
+                    isLoadingInvocations = !append,
+                    isLoadingMoreHistory = append,
+                    runStatusFilter = status
+                )
+            }
             try {
                 // “全部技能”仅指当前可用的技能集合；已删除或禁用而不再出现在技能列表中的记录不展示。
                 val availableSkills = repository.listSkills()
                 val availableSkillIds = availableSkills.mapTo(mutableSetOf()) { it.id }
-                val runs = repository.listRuns(status = statusListFor(status))
-                    .filter { it.skillDefinitionId in availableSkillIds }
+                val result = repository.listRunsPage(
+                    status = statusListFor(status),
+                    page = page,
+                    pageSize = HISTORY_PAGE_SIZE
+                )
+                if (requestVersion != historyRequestVersion) return@launch
+                val runs = result.items.filter { it.skillDefinitionId in availableSkillIds }
                 _uiState.update {
                     it.copy(
                         skills = availableSkills,
-                        invocations = runs,
-                        isLoadingInvocations = false
+                        invocations = if (append) it.invocations.mergeHistoryRuns(runs) else runs,
+                        isLoadingInvocations = false,
+                        isLoadingMoreHistory = false,
+                        historyPage = result.page,
+                        historyTotalPages = result.totalPages,
+                        historyCanLoadMore = result.page < result.totalPages
                     )
                 }
             } catch (e: Exception) {
+                if (requestVersion != historyRequestVersion) return@launch
                 Log.e(TAG, "Failed to load all runs", e)
-                _uiState.update { it.copy(isLoadingInvocations = false, error = "加载历史记录失败: ${e.message}") }
+                _uiState.update {
+                    it.copy(
+                        isLoadingInvocations = false,
+                        isLoadingMoreHistory = false,
+                        error = "加载历史记录失败: ${e.message}"
+                    )
+                }
             }
         }
     }
@@ -4766,4 +4831,11 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         repository.disconnectWebSocket()
         super.onCleared()
     }
+}
+
+/** 续载时按任务编号去重，避免网络重试造成历史卡片重复。 */
+private fun List<RunResponse>.mergeHistoryRuns(nextPage: List<RunResponse>): List<RunResponse> {
+    if (nextPage.isEmpty()) return this
+    val existingIds = mapTo(mutableSetOf()) { it.id }
+    return this + nextPage.filter { existingIds.add(it.id) }
 }

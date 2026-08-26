@@ -252,16 +252,18 @@ fun PsopDemoScreen(
                 MobileHistoryScreen(
                     uiState = uiState,
                     onSkillSelected = viewModel::selectMobileHistorySkill,
-                    onStatusChanged = { status ->
-                        uiState.selectedSkill?.id?.let { viewModel.loadRuns(it, status) }
-                    },
+                    onStatusChanged = viewModel::openHistory,
+                    onRefresh = viewModel::refreshHistory,
+                    onLoadNextPage = viewModel::loadNextHistoryPage,
                     onRunClicked = viewModel::resumeInvocation,
                     onBack = viewModel::navigateBack
                 )
             } else {
                 PsopHistoryScreen(
                     uiState = uiState,
-                    onStatusChanged = { viewModel.loadAllRuns(it) },
+                    onStatusChanged = viewModel::openHistory,
+                    onRefresh = viewModel::refreshHistory,
+                    onLoadNextPage = viewModel::loadNextHistoryPage,
                     onRunClicked = { viewModel.resumeInvocation(it) },
                     onBack = { viewModel.navigateBack() }
                 )

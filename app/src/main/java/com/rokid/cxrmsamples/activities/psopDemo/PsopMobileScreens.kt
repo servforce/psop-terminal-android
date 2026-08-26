@@ -54,6 +54,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,6 +87,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -550,6 +552,8 @@ fun MobileHistoryScreen(
     uiState: PsopDemoUiState,
     onSkillSelected: (SkillSummaryResponse) -> Unit,
     onStatusChanged: (String) -> Unit,
+    onRefresh: () -> Unit,
+    onLoadNextPage: () -> Unit,
     onRunClicked: (RunResponse) -> Unit,
     onBack: () -> Unit
 ) {
@@ -557,6 +561,13 @@ fun MobileHistoryScreen(
     val statuses = listOf("running" to "运行中", "succeeded" to "已完成", "aborted" to "已中止", "cancelled" to "已取消")
     var showSkillMenu by remember { mutableStateOf(false) }
     val selectedSkill = uiState.selectedSkill
+    val listState = rememberLazyListState()
+    HistoryAutoLoadMore(
+        listState = listState,
+        canLoadMore = uiState.historyCanLoadMore,
+        isLoading = uiState.isLoadingMoreHistory,
+        onLoadNextPage = onLoadNextPage
+    )
     Scaffold(containerColor = Color(0xFFF5F7FA)) { padding ->
         Column(Modifier.padding(padding).padding(horizontal = 24.dp, vertical = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -607,19 +618,29 @@ fun MobileHistoryScreen(
                     }
                 }
             }
-            when {
-                uiState.isLoadingInvocations -> Text("正在加载…", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
-                selectedSkill == null -> Text("暂无可用作业技能", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
-                uiState.invocations.isEmpty() -> {
-                    val label = statuses.firstOrNull { it.first == uiState.runStatusFilter }?.second ?: "当前"
-                    Text("暂无${selectedSkill.name}的${label}记录", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
-                }
-                else -> LazyColumn(
-                    contentPadding = PaddingValues(top = 22.dp, bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(uiState.invocations, key = { it.id }) { run ->
-                        HistoryRunCard(run, uiState, onRunClicked)
+            PullToRefreshBox(
+                isRefreshing = uiState.isLoadingInvocations,
+                onRefresh = onRefresh,
+                modifier = Modifier.weight(1f)
+            ) {
+                when {
+                    uiState.isLoadingInvocations -> Text("正在加载…", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
+                    selectedSkill == null -> Text("暂无可用作业技能", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
+                    uiState.invocations.isEmpty() -> {
+                        val label = statuses.firstOrNull { it.first == uiState.runStatusFilter }?.second ?: "当前"
+                        Text("暂无${selectedSkill.name}的${label}记录", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
+                    }
+                    else -> LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(top = 22.dp, bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(uiState.invocations, key = { it.id }) { run ->
+                            HistoryRunCard(run, uiState, onRunClicked)
+                        }
+                        if (uiState.isLoadingMoreHistory) {
+                            item { HistoryLoadingIndicator(color = MobileBlue) }
+                        }
                     }
                 }
             }

@@ -88,6 +88,8 @@ interface PsopApiService {
     @GET("runs")
     suspend fun listRuns(
         @Query("skill_id") skillId: String? = null,
-        @Query("status") status: List<String>? = null
+        @Query("status") status: List<String>? = null,
+        @Query("page") page: Int? = null,
+        @Query("page_size") pageSize: Int? = null
     ): JsonElement
 }

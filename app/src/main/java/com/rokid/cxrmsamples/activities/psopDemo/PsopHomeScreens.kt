@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,7 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -27,6 +30,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,8 +39,11 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rokid.cxrmsamples.network.models.RunResponse
 import java.util.Calendar
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val PsopBlue = Color(0xFF2E66E9)
 private val PsopSoftBlue = Color(0xFFEAF0FF)
@@ -230,15 +238,25 @@ fun HomeRecentRunCard(run: RunResponse, uiState: PsopDemoUiState, onResumeRun: (
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun PsopHistoryScreen(
     uiState: PsopDemoUiState,
     onStatusChanged: (String) -> Unit,
+    onRefresh: () -> Unit,
+    onLoadNextPage: () -> Unit,
     onRunClicked: (RunResponse) -> Unit,
     onBack: () -> Unit
 ) {
     BackHandler(onBack = onBack)
     val statuses = listOf("running" to "运行中", "succeeded" to "已完成", "aborted" to "已中止", "cancelled" to "已取消")
+    val listState = rememberLazyListState()
+    HistoryAutoLoadMore(
+        listState = listState,
+        canLoadMore = uiState.historyCanLoadMore,
+        isLoading = uiState.isLoadingMoreHistory,
+        onLoadNextPage = onLoadNextPage
+    )
     Scaffold(containerColor = PsopPage) { padding ->
         Column(Modifier.padding(padding).padding(horizontal = 32.dp, vertical = 24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -257,16 +275,59 @@ fun PsopHistoryScreen(
                     }
                 }
             }
-            if (uiState.isLoadingInvocations) {
-                Text("正在加载…", color = PsopSecondary, modifier = Modifier.padding(top = 36.dp))
-            } else if (uiState.invocations.isEmpty()) {
-                Text("暂无${statuses.first { it.first == uiState.runStatusFilter }.second}记录", color = PsopSecondary, modifier = Modifier.padding(top = 36.dp))
-            } else {
-                LazyColumn(contentPadding = PaddingValues(top = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(uiState.invocations, key = { it.id }) { run -> HistoryRunCard(run, uiState, onRunClicked) }
+            PullToRefreshBox(
+                isRefreshing = uiState.isLoadingInvocations,
+                onRefresh = onRefresh,
+                modifier = Modifier.weight(1f)
+            ) {
+                when {
+                    uiState.isLoadingInvocations -> Text("正在加载…", color = PsopSecondary, modifier = Modifier.padding(top = 36.dp))
+                    uiState.invocations.isEmpty() -> Text("暂无${statuses.first { it.first == uiState.runStatusFilter }.second}记录", color = PsopSecondary, modifier = Modifier.padding(top = 36.dp))
+                    else -> LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(top = 28.dp, bottom = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        items(uiState.invocations, key = { it.id }) { run -> HistoryRunCard(run, uiState, onRunClicked) }
+                        if (uiState.isLoadingMoreHistory) {
+                            item { HistoryLoadingIndicator(color = PsopBlue) }
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+internal fun HistoryAutoLoadMore(
+    listState: LazyListState,
+    canLoadMore: Boolean,
+    isLoading: Boolean,
+    onLoadNextPage: () -> Unit
+) {
+    LaunchedEffect(listState, canLoadMore, isLoading) {
+        snapshotFlow {
+            val layout = listState.layoutInfo
+            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible to layout.totalItemsCount
+        }
+            .distinctUntilChanged()
+            .collect { (lastVisible, totalItems) ->
+                if (canLoadMore && !isLoading && totalItems > 0 && lastVisible >= totalItems - 1) {
+                    onLoadNextPage()
+                }
+            }
+    }
+}
+
+@Composable
+internal fun HistoryLoadingIndicator(color: Color) {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(color = color, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
     }
 }
 

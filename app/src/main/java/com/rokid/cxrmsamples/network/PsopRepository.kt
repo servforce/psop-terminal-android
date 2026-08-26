@@ -6,6 +6,7 @@ import com.rokid.cxrmsamples.network.models.CreateInvocationRequest
 import com.rokid.cxrmsamples.network.models.EventSource
 import com.rokid.cxrmsamples.network.models.InvocationResponse
 import com.rokid.cxrmsamples.network.models.RunResponse
+import com.rokid.cxrmsamples.network.models.RunPageResponse
 import com.rokid.cxrmsamples.network.models.SkillSummaryResponse
 import com.rokid.cxrmsamples.network.models.TaskStatusResponse
 import com.rokid.cxrmsamples.network.models.TerminalEventAppendResponse
@@ -146,7 +147,46 @@ class PsopRepository {
         val listType = object : TypeToken<List<RunResponse>>() {}.type
         return gson.fromJson(response.unwrapResponseList("运行记录"), listType)
     }
+
+    /**
+     * 运行记录分页查询。兼容旧服务端直接返回数组的格式，避免影响首页等未分页调用方。
+     */
+    suspend fun listRunsPage(
+        skillId: String? = null,
+        status: List<String>? = null,
+        page: Int = 1,
+        pageSize: Int = 20
+    ): RunPageResponse {
+        val response = api.listRuns(
+            skillId = skillId,
+            status = status,
+            page = page,
+            pageSize = pageSize
+        )
+        val listType = object : TypeToken<List<RunResponse>>() {}.type
+        val items: List<RunResponse> = gson.fromJson(response.unwrapResponseList("运行记录"), listType)
+        if (!response.isJsonObject) {
+            return RunPageResponse(
+                items = items,
+                total = items.size,
+                page = page,
+                pageSize = pageSize,
+                totalPages = if (items.isEmpty()) 0 else 1
+            )
+        }
+
+        val root = response.asJsonObject
+        val total = root.intValue("total") ?: items.size
+        val responsePage = root.intValue("page") ?: page
+        val responsePageSize = root.intValue("page_size") ?: pageSize
+        val totalPages = root.intValue("total_pages")
+            ?: if (total == 0) 0 else (total + responsePageSize - 1) / responsePageSize
+        return RunPageResponse(items, total, responsePage, responsePageSize, totalPages)
+    }
 }
+
+private fun com.google.gson.JsonObject.intValue(key: String): Int? =
+    get(key)?.let { value -> runCatching { value.asInt }.getOrNull() }
 
 /**
  * 兼容旧数组格式，以及服务端统一响应包装后的技能列表。
