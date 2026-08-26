@@ -43,6 +43,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,6 +52,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -121,6 +124,13 @@ enum class InspectionScreen {
 
 enum class RunListScope { SKILL, ALL }
 
+/** 历史列表中运行中任务的实时进度摘要。 */
+data class HistoryRunProgress(
+    val completed: Int,
+    val total: Int,
+    val percent: Int
+)
+
 data class PsopDemoUiState(
     val isRunning: Boolean = false,
     val runId: String? = null,
@@ -157,6 +167,7 @@ data class PsopDemoUiState(
     val isLoadingMoreHistory: Boolean = false,
     /** 下拉刷新时保留当前列表，仅在筛选条下显示轻量加载反馈。 */
     val isRefreshingHistory: Boolean = false,
+    val historyProgressByRunId: Map<String, HistoryRunProgress> = emptyMap(),
     val taskStatus: TaskStatusResponse? = null,  // 任务进度状态
     val isTtsPlaying: Boolean = false,  // 眼镜端 TTS 是否正在播报（用于显示"停止播报"按钮）
     /** 手机端离线播报的完成序号，仅供手机 AR 提示卡在播报结束后自动收起。 */
@@ -829,6 +840,8 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 }
                 if (requestVersion != historyRequestVersion) return@launch
                 val runs = result?.items.orEmpty()
+                val progressByRunId = loadHistoryRunProgress(runs)
+                if (requestVersion != historyRequestVersion) return@launch
                 _uiState.update {
                     it.copy(
                         skills = availableSkills,
@@ -837,6 +850,11 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                         isLoadingInvocations = false,
                         isLoadingMoreHistory = false,
                         isRefreshingHistory = false,
+                        historyProgressByRunId = if (append) {
+                            it.historyProgressByRunId + progressByRunId
+                        } else {
+                            progressByRunId
+                        },
                         historyPage = result?.page ?: 1,
                         historyTotalPages = result?.totalPages ?: 0,
                         historyCanLoadMore = result?.let { it.page < it.totalPages } == true
@@ -1010,6 +1028,8 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 )
                 if (requestVersion != historyRequestVersion) return@launch
                 val runs = result.items.filter { it.skillDefinitionId in availableSkillIds }
+                val progressByRunId = loadHistoryRunProgress(runs)
+                if (requestVersion != historyRequestVersion) return@launch
                 _uiState.update {
                     it.copy(
                         skills = availableSkills,
@@ -1017,6 +1037,11 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                         isLoadingInvocations = false,
                         isLoadingMoreHistory = false,
                         isRefreshingHistory = false,
+                        historyProgressByRunId = if (append) {
+                            it.historyProgressByRunId + progressByRunId
+                        } else {
+                            progressByRunId
+                        },
                         historyPage = result.page,
                         historyTotalPages = result.totalPages,
                         historyCanLoadMore = result.page < result.totalPages
@@ -1035,6 +1060,31 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 }
             }
         }
+    }
+
+    /** 仅为当前历史页的运行中任务补充实时进度；单条失败不影响列表加载。 */
+    private suspend fun loadHistoryRunProgress(runs: List<RunResponse>): Map<String, HistoryRunProgress> = supervisorScope {
+        runs.filter(::isActiveRun)
+            .map { run ->
+                async {
+                    try {
+                        val progress = repository.getTaskStatus(run.id).progress ?: return@async null
+                        run.id to HistoryRunProgress(
+                            completed = progress.completed,
+                            total = progress.total,
+                            percent = progress.percent
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to load history progress for run=${run.id}", e)
+                        null
+                    }
+                }
+            }
+            .awaitAll()
+            .filterNotNull()
+            .toMap()
     }
 
     fun clearError() {

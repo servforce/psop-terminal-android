@@ -36,6 +36,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -418,6 +419,28 @@ internal fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunCli
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(skillName(run, uiState), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            }
+            uiState.historyProgressByRunId[run.id]?.let { progress ->
+                if (progress.total > 0) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("作业进度", color = PsopSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Text(
+                            "${progress.completed} / ${progress.total} · ${progress.percent}%",
+                            color = PsopBlue,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { (progress.percent.coerceIn(0, 100)) / 100f },
+                        modifier = Modifier.fillMaxWidth().padding(top = 7.dp).height(6.dp),
+                        color = PsopBlue,
+                        trackColor = PsopSoftBlue
+                    )
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
