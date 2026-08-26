@@ -1395,6 +1395,8 @@ internal fun MobileTaskChatScreen(
     onBack: () -> Unit,
     onSend: (String) -> Unit
 ) {
+    // 接管系统侧滑返回，终态历史会话应回到历史列表，而不是退出到模式选择页。
+    BackHandler(onBack = onBack)
     var input by remember { mutableStateOf("") }
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     val isActiveMobileTask = isMobileTaskActive(uiState)
@@ -1404,7 +1406,7 @@ internal fun MobileTaskChatScreen(
                 title = { Text(uiState.selectedSkill?.name ?: "PSOP 任务助手") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回 AR")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回历史记录")
                     }
                 }
             )

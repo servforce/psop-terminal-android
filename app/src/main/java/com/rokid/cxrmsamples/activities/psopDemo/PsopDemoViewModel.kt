@@ -1116,7 +1116,15 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                         }
                     )
                 }
-                if (returnToHistory) loadAllRuns() else _uiState.value.selectedSkill?.id?.let { loadRuns(it) }
+                if (returnToHistory) {
+                    if (_uiState.value.operatingMode == PsopOperatingMode.MOBILE) {
+                        openMobileHistory(_uiState.value.runStatusFilter, page = 1)
+                    } else {
+                        loadAllRuns()
+                    }
+                } else {
+                    _uiState.value.selectedSkill?.id?.let { loadRuns(it) }
+                }
                 // 清理本次会话中的本地图片缓存
                 cleanupPhotoCache()
                 // 手机模式没有创建眼镜端 P2P 连接，避免触碰眼镜端状态。
