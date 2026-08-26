@@ -112,6 +112,8 @@ enum class InspectionScreen {
     MODE_SELECTION,
     HOME,
     SKILL_LIST,
+    /** 手机端任务详情：只介绍任务并提供启动入口，不展示历史运行记录。 */
+    MOBILE_SKILL_DETAIL,
     INVOCATION_LIST,
     HISTORY,
     INTERACTION
@@ -730,13 +732,19 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun selectSkill(skill: SkillSummaryResponse) {
+        val isMobileMode = _uiState.value.operatingMode == PsopOperatingMode.MOBILE
         _uiState.update {
             it.copy(
                 selectedSkill = skill,
-                currentScreen = InspectionScreen.INVOCATION_LIST,
+                currentScreen = if (isMobileMode) {
+                    InspectionScreen.MOBILE_SKILL_DETAIL
+                } else {
+                    InspectionScreen.INVOCATION_LIST
+                },
                 runListScope = RunListScope.SKILL
             )
         }
+        // 手机任务详情只借助运行状态判断是否有可继续的任务，不在此展示历史列表。
         loadRuns(skill.id)
     }
 
@@ -912,11 +920,18 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         when (current) {
             InspectionScreen.MODE_SELECTION -> Unit
             InspectionScreen.SKILL_LIST, InspectionScreen.HISTORY -> openHome()
-            InspectionScreen.INVOCATION_LIST -> _uiState.update { it.copy(currentScreen = InspectionScreen.SKILL_LIST) }
+            InspectionScreen.MOBILE_SKILL_DETAIL, InspectionScreen.INVOCATION_LIST ->
+                _uiState.update { it.copy(currentScreen = InspectionScreen.SKILL_LIST) }
             InspectionScreen.INTERACTION -> {
                 val returnToHistory = _uiState.value.runListScope == RunListScope.ALL
                 _uiState.update {
-                    it.copy(currentScreen = if (returnToHistory) InspectionScreen.HISTORY else InspectionScreen.INVOCATION_LIST)
+                    it.copy(
+                        currentScreen = when {
+                            returnToHistory -> InspectionScreen.HISTORY
+                            it.operatingMode == PsopOperatingMode.MOBILE -> InspectionScreen.MOBILE_SKILL_DETAIL
+                            else -> InspectionScreen.INVOCATION_LIST
+                        }
+                    )
                 }
                 if (returnToHistory) loadAllRuns() else _uiState.value.selectedSkill?.id?.let { loadRuns(it) }
                 // 清理本次会话中的本地图片缓存

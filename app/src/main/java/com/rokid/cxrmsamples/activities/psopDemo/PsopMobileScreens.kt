@@ -67,6 +67,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Stop
@@ -112,6 +113,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.rokid.cxrmsamples.asr.SherpaAsrEngine
+import com.rokid.cxrmsamples.network.models.RunResponse
+import com.rokid.cxrmsamples.network.models.SkillSummaryResponse
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -304,6 +307,207 @@ private fun ModeCard(title: String, description: String, tag: String, onClick: (
             Text(description, color = Color(0xFF6B7688), style = MaterialTheme.typography.bodyMedium)
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MobileSkillListScreen(
+    skills: List<SkillSummaryResponse>,
+    isLoading: Boolean,
+    error: String?,
+    onSkillSelected: (SkillSummaryResponse) -> Unit,
+    onRetry: () -> Unit,
+    onBack: () -> Unit
+) {
+    BackHandler(onBack = onBack)
+    Scaffold(
+        containerColor = Color(0xFFF5F7FA),
+        topBar = {
+            TopAppBar(
+                title = { Text("任务", fontWeight = FontWeight.Medium) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onRetry) {
+                        Icon(Icons.Default.Refresh, contentDescription = "刷新任务")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        when {
+            isLoading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.CircularProgressIndicator(color = MobileBlue)
+            }
+            error != null -> MobileSkillEmptyState(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                message = error,
+                actionLabel = "重试",
+                onAction = onRetry
+            )
+            skills.isEmpty() -> MobileSkillEmptyState(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                message = "暂无可用任务",
+                actionLabel = "刷新",
+                onAction = onRetry
+            )
+            else -> LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                item {
+                    Text("选择一项任务，查看作业说明后再启动。", color = Color(0xFF6B7688))
+                }
+                items(skills, key = { it.id }) { skill ->
+                    val introduction = mobileSkillIntroduction(skill)
+                    Surface(
+                        color = Color.White,
+                        shape = RoundedCornerShape(24.dp),
+                        border = BorderStroke(1.dp, Color(0xFFE0E7F0)),
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).clickable {
+                            onSkillSelected(skill)
+                        }
+                    ) {
+                        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("AI 现场作业", color = MobileBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(skill.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text(introduction, color = Color(0xFF6B7688), style = MaterialTheme.typography.bodyMedium)
+                            Text("查看任务说明", color = MobileBlue, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MobileSkillEmptyState(
+    modifier: Modifier,
+    message: String,
+    actionLabel: String,
+    onAction: () -> Unit
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(message, color = Color(0xFF6B7688))
+        Spacer(Modifier.height(14.dp))
+        Button(onClick = onAction, colors = ButtonDefaults.buttonColors(containerColor = MobileBlue)) {
+            Text(actionLabel)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MobileSkillDetailScreen(
+    skill: SkillSummaryResponse?,
+    activeRun: RunResponse?,
+    isLoading: Boolean,
+    onStartNew: () -> Unit,
+    onResume: (RunResponse) -> Unit,
+    onBack: () -> Unit
+) {
+    BackHandler(onBack = onBack)
+    val task = skill ?: return
+    val introduction = mobileSkillIntroduction(task)
+    Scaffold(
+        containerColor = Color(0xFFF5F7FA),
+        topBar = {
+            TopAppBar(
+                title = { Text("任务说明", fontWeight = FontWeight.Medium) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                }
+            )
+        },
+        bottomBar = {
+            Surface(color = Color.White, shadowElevation = 8.dp) {
+                Column(Modifier.padding(horizontal = 24.dp, vertical = 14.dp)) {
+                    if (activeRun != null) {
+                        Button(
+                            onClick = { onResume(activeRun) },
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MobileBlue)
+                        ) { Text("继续当前任务", fontSize = 18.sp) }
+                        Text(
+                            "当前任务仍在进行中",
+                            color = Color(0xFF6B7688),
+                            fontSize = 12.sp,
+                            modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)
+                        )
+                        androidx.compose.material3.TextButton(
+                            onClick = onStartNew,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) { Text("启动新任务", color = MobileBlue) }
+                    } else {
+                        Button(
+                            onClick = onStartNew,
+                            enabled = !isLoading,
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MobileBlue)
+                        ) { Text(if (isLoading) "正在检查任务状态…" else "启动新任务", fontSize = 18.sp) }
+                    }
+                }
+            }
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            item {
+                Text("AI 现场作业", color = MobileBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(task.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+            }
+            item {
+                MobileTaskInfoCard(title = "任务介绍", content = introduction)
+            }
+            item {
+                MobileTaskInfoCard(
+                    title = "作业方式",
+                    content = "启动后进入手机 AR 实时画面，按任务步骤操作；完成后由 AI 对现场结果进行核验。"
+                )
+            }
+            item {
+                MobileTaskInfoCard(
+                    title = "任务流程",
+                    content = "启动任务 → 跟随现场引导 → 提交关键画面 → 获取核验结果"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MobileTaskInfoCard(title: String, content: String) {
+    Surface(
+        color = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, Color(0xFFE0E7F0)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            Text(content, color = Color(0xFF6B7688), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+private fun mobileSkillIntroduction(skill: SkillSummaryResponse): String = when {
+    skill.name.contains("电脑") && (skill.name.contains("安装") || skill.name.contains("装机")) ->
+        "按照主机装配顺序完成关键部件安装，并在关键步骤获取现场核验结果。"
+    skill.name.contains("维修") -> "根据现场引导完成设备检查、修正与维修结果核验。"
+    skill.name.contains("巡检") -> "按照标准巡检路径完成检查，并记录现场结果。"
+    else -> "跟随现场引导完成本次作业，并在关键步骤获取 AI 核验结果。"
 }
 
 @Composable

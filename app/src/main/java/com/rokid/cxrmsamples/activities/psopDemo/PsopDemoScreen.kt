@@ -204,13 +204,36 @@ fun PsopDemoScreen(
                 )
             }
         }
-        InspectionScreen.SKILL_LIST -> SkillListScreen(
-            skills = uiState.skills,
-            isLoading = uiState.isLoadingSkills,
-            error = uiState.error,
-            onSkillSelected = { viewModel.selectSkill(it) },
-            onRetry = { viewModel.loadSkills() },
-            onBack = { viewModel.navigateBack() }
+        InspectionScreen.SKILL_LIST -> {
+            if (uiState.operatingMode == PsopOperatingMode.MOBILE) {
+                MobileSkillListScreen(
+                    skills = uiState.skills,
+                    isLoading = uiState.isLoadingSkills,
+                    error = uiState.error,
+                    onSkillSelected = viewModel::selectSkill,
+                    onRetry = viewModel::loadSkills,
+                    onBack = viewModel::navigateBack
+                )
+            } else {
+                SkillListScreen(
+                    skills = uiState.skills,
+                    isLoading = uiState.isLoadingSkills,
+                    error = uiState.error,
+                    onSkillSelected = { viewModel.selectSkill(it) },
+                    onRetry = { viewModel.loadSkills() },
+                    onBack = { viewModel.navigateBack() }
+                )
+            }
+        }
+        InspectionScreen.MOBILE_SKILL_DETAIL -> MobileSkillDetailScreen(
+            skill = uiState.selectedSkill,
+            activeRun = uiState.invocations.firstOrNull {
+                it.skillDefinitionId == uiState.selectedSkill?.id && it.status in MobileActiveRunStatuses
+            },
+            isLoading = uiState.isLoadingInvocations,
+            onStartNew = viewModel::startSkill,
+            onResume = viewModel::resumeInvocation,
+            onBack = viewModel::navigateBack
         )
         InspectionScreen.INVOCATION_LIST -> PsopSkillRunsScreen(
             skillName = uiState.selectedSkill?.name ?: "巡检技能",
