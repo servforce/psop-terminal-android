@@ -4,12 +4,12 @@ import com.rokid.cxrmsamples.network.models.AppendTerminalEventRequest
 import com.rokid.cxrmsamples.network.models.CreateInvocationRequest
 import com.rokid.cxrmsamples.network.models.InvocationResponse
 import com.rokid.cxrmsamples.network.models.RunResponse
-import com.rokid.cxrmsamples.network.models.SkillSummaryResponse
 import com.rokid.cxrmsamples.network.models.TaskStatusResponse
 import com.rokid.cxrmsamples.network.models.TerminalEventAppendResponse
 import com.rokid.cxrmsamples.network.models.TerminalEventResponse
 import com.rokid.cxrmsamples.network.models.TerminalSessionResponse
 import com.rokid.cxrmsamples.network.models.TraceEvent
+import com.google.gson.JsonElement
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
@@ -83,7 +83,7 @@ interface PsopApiService {
     ): ResponseBody
 
     @GET("skills")
-    suspend fun listSkills(@Query("is_published") isPublished: String? = null): List<SkillSummaryResponse>
+    suspend fun listSkills(@Query("is_published") isPublished: String? = null): JsonElement
 
     @GET("runs")
     suspend fun listRuns(

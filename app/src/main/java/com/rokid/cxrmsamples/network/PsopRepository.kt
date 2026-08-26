@@ -13,6 +13,9 @@ import com.rokid.cxrmsamples.network.models.TerminalEventResponse
 import com.rokid.cxrmsamples.network.models.TerminalSessionResponse
 import com.rokid.cxrmsamples.network.models.TraceEvent
 import com.rokid.cxrmsamples.network.models.WebSocketEvent
+import com.google.gson.Gson
+import com.google.gson.JsonElement
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import okhttp3.MultipartBody
@@ -23,6 +26,7 @@ import retrofit2.HttpException
 class PsopRepository {
     private val api = RetrofitClient.apiService
     private val wsManager = PsopWebSocketManager(RetrofitClient.okHttpClient, maxReconnectAttempts = 5)
+    private val gson = Gson()
 
     val wsEvents: SharedFlow<WebSocketEvent> get() = wsManager.events
     val connectionState: StateFlow<ConnectionState> get() = wsManager.connectionState
@@ -132,10 +136,36 @@ class PsopRepository {
     }
 
     suspend fun listSkills(): List<SkillSummaryResponse> {
-        return api.listSkills(isPublished = "true")
+        val response = api.listSkills(isPublished = "true")
+        val listType = object : TypeToken<List<SkillSummaryResponse>>() {}.type
+        return gson.fromJson(response.unwrapSkillList(), listType)
     }
 
     suspend fun listRuns(skillId: String? = null, status: List<String>? = null): List<RunResponse> {
         return api.listRuns(skillId = skillId, status = status)
     }
+}
+
+/**
+ * 兼容旧数组格式，以及服务端统一响应包装后的技能列表。
+ * 例如 [{...}]、{"items":[...]}、{"data":[...]}。
+ */
+private fun JsonElement.unwrapSkillList(): JsonElement {
+    if (isJsonArray) return this
+    if (!isJsonObject) throw IllegalStateException("技能列表返回格式无效")
+
+    val keys = listOf("items", "data", "skills", "results")
+    val root = asJsonObject
+    for (key in keys) {
+        val value = root.get(key) ?: continue
+        if (value.isJsonArray) return value
+        if (value.isJsonObject) {
+            val nested = value.asJsonObject
+            for (nestedKey in keys) {
+                val nestedValue = nested.get(nestedKey)
+                if (nestedValue?.isJsonArray == true) return nestedValue
+            }
+        }
+    }
+    throw IllegalStateException("技能列表响应中未找到数组数据")
 }
