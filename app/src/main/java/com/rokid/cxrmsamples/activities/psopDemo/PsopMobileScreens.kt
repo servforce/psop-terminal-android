@@ -75,8 +75,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -541,36 +540,23 @@ fun MobileHistoryScreen(
                     Icon(Icons.Default.Home, contentDescription = "返回首页", tint = Color(0xFF6B7688))
                 }
             }
-            Text("作业技能", color = Color(0xFF6B7688), fontSize = 12.sp, modifier = Modifier.padding(top = 20.dp, bottom = 7.dp))
-            Box {
-                Surface(
-                    color = Color.White,
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE0E7F0)),
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable {
-                        showSkillMenu = true
-                    }
+            Text("当前作业", color = Color(0xFF6B7688), fontSize = 12.sp, modifier = Modifier.padding(top = 20.dp, bottom = 7.dp))
+            Surface(
+                color = Color(0xFFEAF1FF),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { showSkillMenu = true }
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(selectedSkill?.name ?: "正在加载作业技能…", modifier = Modifier.weight(1f))
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "选择作业技能", tint = Color(0xFF6B7688))
-                    }
-                }
-                DropdownMenu(expanded = showSkillMenu, onDismissRequest = { showSkillMenu = false }) {
-                    uiState.skills.forEach { skill ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(skill.name, color = if (skill.id == selectedSkill?.id) MobileBlue else Color.Unspecified)
-                            },
-                            onClick = {
-                                showSkillMenu = false
-                                if (skill.id != selectedSkill?.id) onSkillSelected(skill)
-                            }
-                        )
-                    }
+                    Text("作业 · ${selectedSkill?.name ?: "正在加载…"}", color = MobileBlue, fontWeight = FontWeight.SemiBold)
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "切换作业技能",
+                        tint = MobileBlue,
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
                 }
             }
             Row(
@@ -609,6 +595,41 @@ fun MobileHistoryScreen(
                 ) {
                     items(uiState.invocations, key = { it.id }) { run ->
                         HistoryRunCard(run, uiState, onRunClicked)
+                    }
+                }
+            }
+        }
+    }
+    if (showSkillMenu) {
+        ModalBottomSheet(
+            onDismissRequest = { showSkillMenu = false },
+            containerColor = Color.White
+        ) {
+            Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
+                Text("选择作业技能", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("历史记录只显示所选作业", color = Color(0xFF6B7688), fontSize = 13.sp, modifier = Modifier.padding(top = 5.dp, bottom = 16.dp))
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(uiState.skills, key = { it.id }) { skill ->
+                        val isSelected = skill.id == selectedSkill?.id
+                        Surface(
+                            color = if (isSelected) Color(0xFFEAF1FF) else Color(0xFFF7F9FC),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable {
+                                showSkillMenu = false
+                                if (!isSelected) onSkillSelected(skill)
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(skill.name, modifier = Modifier.weight(1f), fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal)
+                                if (isSelected) Text("当前", color = MobileBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
                     }
                 }
             }
