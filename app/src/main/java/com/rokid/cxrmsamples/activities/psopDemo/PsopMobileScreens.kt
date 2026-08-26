@@ -290,11 +290,13 @@ fun PsopModeSelectionScreen(
 
 @Composable
 private fun ModeCard(title: String, description: String, tag: String, onClick: () -> Unit) {
+    val cardShape = RoundedCornerShape(24.dp)
     Surface(
-        shape = RoundedCornerShape(24.dp),
+        shape = cardShape,
         color = Color.White,
         border = BorderStroke(1.dp, Color(0xFFE0E7F0)),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+        // 将点击波纹裁切到卡片圆角内，避免按压时出现矩形底色。
+        modifier = Modifier.fillMaxWidth().clip(cardShape).clickable(onClick = onClick)
     ) {
         Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(tag, color = MobileBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
