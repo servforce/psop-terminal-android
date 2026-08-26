@@ -122,6 +122,9 @@ class OfflinePhoneTts(
             Log.i(TAG, "Extracting offline phone TTS model from assets")
             targetDir.deleteRecursively()
             copyAssetTree(ASSET_MODEL_DIR, targetDir)
+        } else {
+            // 词典会随版本迭代补充 PSOP 专用词与多音字，已安装用户无需重解压整套模型。
+            copyAssetTree("$ASSET_MODEL_DIR/$LEXICON_FILE", File(targetDir, LEXICON_FILE))
         }
         check(requiredFiles.all { file -> File(targetDir, file).isFile }) {
             "Offline phone TTS files are incomplete: ${targetDir.absolutePath}"
