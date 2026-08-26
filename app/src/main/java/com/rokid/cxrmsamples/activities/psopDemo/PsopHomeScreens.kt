@@ -421,14 +421,6 @@ internal fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunCli
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(historyCardTitle(run, progress), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             }
-            historyCardSubtitle(run)?.let { subtitle ->
-                Text(
-                    subtitle,
-                    color = PsopSecondary,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(top = 7.dp)
-                )
-            }
             progress?.let { progress ->
                 if (progress.total > 0) {
                     Row(
@@ -503,16 +495,11 @@ private fun isActiveHistoryRun(run: RunResponse): Boolean = run.status in setOf(
 )
 
 private fun historyCardTitle(run: RunResponse, progress: HistoryRunProgress?): String = when {
-    isActiveHistoryRun(run) -> progress?.currentStageTitle ?: "正在进行作业"
+    isActiveHistoryRun(run) -> progress?.currentStageTitle ?: "当前作业"
     run.status == "succeeded" -> "本次作业已完成"
     run.status == "cancelled" -> "任务已取消"
     run.status == "aborted" || run.status == "failed" -> "任务已中止"
     else -> "作业记录"
-}
-
-private fun historyCardSubtitle(run: RunResponse): String? = when {
-    isActiveHistoryRun(run) -> "正在进行"
-    else -> null
 }
 
 private fun historyTimeLabel(run: RunResponse): String =
