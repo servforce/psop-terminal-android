@@ -1,5 +1,6 @@
 package com.rokid.cxrmsamples.activities.psopDemo
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
@@ -39,6 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -339,17 +343,29 @@ fun PsopSkillRunsScreen(
 
 @Composable
 internal fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunClicked: (RunResponse) -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     Surface(shape = RoundedCornerShape(24.dp), color = Color.White, modifier = Modifier.fillMaxWidth().clickable { onRunClicked(run) }) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(skillName(run, uiState), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                StatusChip(historyStatusLabel(run.status), run.status)
             }
-            Text(
-                formatRunDate(run.createdAt),
-                color = PsopSecondary,
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(formatRunDate(run.createdAt), color = PsopSecondary, modifier = Modifier.weight(1f))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
+                        clipboard.setText(AnnotatedString(run.id))
+                        Toast.makeText(context, "编号已复制", Toast.LENGTH_SHORT).show()
+                    }.padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "复制编号", tint = PsopBlue, modifier = Modifier.size(16.dp))
+                    Text("复制编号", color = PsopBlue, fontSize = 13.sp, modifier = Modifier.padding(start = 5.dp))
+                }
+            }
         }
     }
 }
