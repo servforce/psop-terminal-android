@@ -131,7 +131,7 @@ fun PsopHomeScreen(
             }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("最近巡检", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                    Text("最近任务", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                     Text("查看全部", color = PsopBlue, modifier = Modifier.clickable(onClick = onOpenHistory))
                 }
             }
@@ -229,7 +229,7 @@ fun HomeRecentRunCard(run: RunResponse, uiState: PsopDemoUiState, onResumeRun: (
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     val copyInteraction = remember { MutableInteractionSource() }
-    val progress = uiState.historyProgressByRunId[run.id]
+    val progress = uiState.homeRecentRunProgress
     Surface(shape = RoundedCornerShape(24.dp), color = Color.White, modifier = Modifier.fillMaxWidth().clickable { onResumeRun(run) }) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

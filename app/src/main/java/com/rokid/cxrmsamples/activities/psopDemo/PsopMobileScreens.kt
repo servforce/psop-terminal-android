@@ -748,7 +748,7 @@ fun PsopMobileHomeScreen(
             }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("最近巡检", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                    Text("最近任务", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                     Text("查看全部", color = MobileBlue, modifier = Modifier.clickable(onClick = onOpenHistory))
                 }
             }

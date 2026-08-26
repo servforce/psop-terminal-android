@@ -150,8 +150,10 @@ data class PsopDemoUiState(
     val invocations: List<RunResponse> = emptyList(),
     /** 首页“继续巡检”目标：本机最近打开且仍在运行的任务，或最近更新的运行中任务。 */
     val homeResumeRun: RunResponse? = null,
-    /** 首页“最近巡检”目标：所有状态中最后更新的一条任务。 */
+    /** 首页“最近任务”目标：所有状态中最后更新的一条任务。 */
     val homeRecentRun: RunResponse? = null,
+    /** 首页最近任务为运行中时的实时进度。 */
+    val homeRecentRunProgress: HistoryRunProgress? = null,
     val isLoadingHomeRuns: Boolean = false,
     /** 仅在 CXR SDK 成功返回时展示，避免用占位电量误导现场人员。 */
     val glassBatteryLevel: Int? = null,
@@ -972,10 +974,15 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                     // 本机记录已终态或不可见，移除后避免下次继续尝试陈旧任务。
                     clearLastOpenedActiveRun()
                 }
+                val recentRun = runs.firstOrNull()
+                val recentProgress = recentRun
+                    ?.takeIf(::isActiveRun)
+                    ?.let { loadHistoryRunProgress(listOf(it))[it.id] }
                 _uiState.update {
                     it.copy(
                         homeResumeRun = resumeRun,
-                        homeRecentRun = runs.firstOrNull(),
+                        homeRecentRun = recentRun,
+                        homeRecentRunProgress = recentProgress,
                         isLoadingHomeRuns = false
                     )
                 }
