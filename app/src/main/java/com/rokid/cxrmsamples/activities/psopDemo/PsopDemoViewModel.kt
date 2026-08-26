@@ -128,7 +128,9 @@ enum class RunListScope { SKILL, ALL }
 data class HistoryRunProgress(
     val completed: Int,
     val total: Int,
-    val percent: Int
+    val percent: Int,
+    /** 服务端 task-status 中与对话页一致的中文阶段标题。 */
+    val currentStageTitle: String? = null
 )
 
 data class PsopDemoUiState(
@@ -1068,11 +1070,16 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
             .map { run ->
                 async {
                     try {
-                        val progress = repository.getTaskStatus(run.id).progress ?: return@async null
+                        val taskStatus = repository.getTaskStatus(run.id)
+                        val progress = taskStatus.progress ?: return@async null
                         run.id to HistoryRunProgress(
                             completed = progress.completed,
                             total = progress.total,
-                            percent = progress.percent
+                            percent = progress.percent,
+                            currentStageTitle = taskStatus.stages
+                                .firstOrNull { it.id == taskStatus.currentStageId }
+                                ?.title
+                                ?.takeIf { it.isNotBlank() }
                         )
                     } catch (e: CancellationException) {
                         throw e

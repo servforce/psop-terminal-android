@@ -419,7 +419,7 @@ internal fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunCli
     Surface(shape = RoundedCornerShape(24.dp), color = Color.White, modifier = Modifier.fillMaxWidth().clickable { onRunClicked(run) }) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(historyCardTitle(run), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text(historyCardTitle(run, progress), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             }
             historyCardSubtitle(run)?.let { subtitle ->
                 Text(
@@ -504,8 +504,8 @@ private fun isActiveHistoryRun(run: RunResponse): Boolean = run.status in setOf(
     "queued", "waiting_runtime", "accepted", "running", "waiting_input", "finalizing"
 )
 
-private fun historyCardTitle(run: RunResponse): String = when {
-    isActiveHistoryRun(run) -> run.currentStep?.takeIf { it.isNotBlank() } ?: "正在进行作业"
+private fun historyCardTitle(run: RunResponse, progress: HistoryRunProgress?): String = when {
+    isActiveHistoryRun(run) -> progress?.currentStageTitle ?: "正在进行作业"
     run.status == "succeeded" -> "本次作业已完成"
     run.status == "cancelled" -> "任务已取消"
     run.status == "aborted" || run.status == "failed" -> "任务已中止"
@@ -514,8 +514,6 @@ private fun historyCardTitle(run: RunResponse): String = when {
 
 private fun historyCardSubtitle(run: RunResponse): String? = when {
     isActiveHistoryRun(run) -> "正在进行"
-    (run.status == "aborted" || run.status == "failed") && !run.currentStep.isNullOrBlank() ->
-        "中止于：${run.currentStep}"
     else -> null
 }
 
