@@ -714,9 +714,14 @@ fun PsopMobileHomeScreen(
 fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var showChat by rememberSaveable { mutableStateOf(false) }
     var isCaptureMode by rememberSaveable { mutableStateOf(false) }
+    var isConversationMode by rememberSaveable { mutableStateOf(false) }
     var modeSwipeDistance by remember { mutableFloatStateOf(0f) }
     val selectedModeOffset by animateDpAsState(
-        targetValue = if (isCaptureMode) 52.dp else 0.dp,
+        targetValue = when {
+            isCaptureMode -> 52.dp
+            isConversationMode -> (-52).dp
+            else -> 0.dp
+        },
         label = "mobileModeAlignment"
     )
     var captureStatus by remember { mutableStateOf<String?>(null) }
@@ -906,9 +911,15 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         when (index) {
             0 -> {
                 isCaptureMode = true
+                isConversationMode = false
             }
             1 -> {
                 isCaptureMode = false
+                isConversationMode = false
+            }
+            else -> {
+                isCaptureMode = false
+                isConversationMode = true
             }
         }
     }
@@ -987,17 +998,21 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     modifier = Modifier
                         .offset(x = selectedModeOffset)
                         .padding(bottom = 12.dp)
-                        .pointerInput(isCaptureMode) {
+                        .pointerInput(isCaptureMode, isConversationMode) {
                             detectHorizontalDragGestures(
                                 onDragStart = { modeSwipeDistance = 0f },
                                 onHorizontalDrag = { _, dragAmount ->
                                     modeSwipeDistance += dragAmount
                                 },
                                 onDragEnd = {
-                                    val currentIndex = if (isCaptureMode) 0 else 1
+                                    val currentIndex = when {
+                                        isCaptureMode -> 0
+                                        isConversationMode -> 2
+                                        else -> 1
+                                    }
                                     when {
                                         modeSwipeDistance <= -modeSwipeThresholdPx ->
-                                            selectControlMode((currentIndex + 1).coerceAtMost(1))
+                                            selectControlMode((currentIndex + 1).coerceAtMost(2))
                                         modeSwipeDistance >= modeSwipeThresholdPx ->
                                             selectControlMode((currentIndex - 1).coerceAtLeast(0))
                                     }
@@ -1017,26 +1032,39 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     )
                     Text(
                         "语音",
-                        color = if (!isCaptureMode) MobileModeAccent else Color(0xFFB8C4D6),
+                        color = if (!isCaptureMode && !isConversationMode) MobileModeAccent else Color(0xFFB8C4D6),
                         fontSize = 13.sp,
-                        fontWeight = if (!isCaptureMode) FontWeight.Bold else FontWeight.Normal,
+                        fontWeight = if (!isCaptureMode && !isConversationMode) FontWeight.Bold else FontWeight.Normal,
                         modifier = Modifier.clickable(interactionSource = voiceModeInteraction, indication = null) { selectControlMode(1) }
                     )
                     Text(
                         "会话",
-                        color = Color(0xFFB8C4D6),
+                        color = if (isConversationMode) MobileModeAccent else Color(0xFFB8C4D6),
                         fontSize = 13.sp,
-                        modifier = Modifier.clickable(interactionSource = conversationModeInteraction, indication = null) { showChat = true }
+                        fontWeight = if (isConversationMode) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.clickable(interactionSource = conversationModeInteraction, indication = null) { selectControlMode(2) }
                     )
                 }
             Box(modifier = Modifier.fillMaxWidth()) {
                 Surface(
                     shape = CircleShape,
-                    color = if (isCaptureMode) Color.White else if (isListening) Color.White else MobileBlue,
+                    color = when {
+                        isCaptureMode -> Color.White
+                        isListening -> Color.White
+                        else -> MobileBlue
+                    },
                     shadowElevation = 8.dp,
                     modifier = Modifier.size(62.dp).align(Alignment.Center)
                 ) {
-                    if (isCaptureMode) {
+                    if (isConversationMode) {
+                        IconButton(onClick = { showChat = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = "进入会话",
+                                tint = Color.White
+                            )
+                        }
+                    } else if (isCaptureMode) {
                         IconButton(
                             onClick = {
                                 if (hasCameraPermission) captureAndUpload() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
@@ -1093,16 +1121,6 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                                 tint = if (isListening) MobileBlue else Color.White
                             )
                         }
-                    }
-                }
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0xFF172A44),
-                    border = BorderStroke(1.dp, Color(0xFF37526F)),
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 38.dp).size(46.dp).clip(CircleShape).clickable { showChat = true }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Send, contentDescription = "进入会话", tint = Color(0xFF9EC1FF), modifier = Modifier.size(21.dp))
                     }
                 }
             }
