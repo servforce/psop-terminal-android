@@ -1019,14 +1019,24 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
 
     /** 手机模式本地播报：不调用 CXR，也不会向眼镜发送任何文字。 */
     private fun speakOnPhone(text: String) {
-        val tts = phoneOfflineTts ?: OfflinePhoneTts(getApplication<Application>()) {
+        phoneTts().speak(text)
+    }
+
+    /** 手机任务进入后静默预热，避免首条 AI 回复等待模型初始化。 */
+    private fun warmUpPhoneTts() {
+        if (_uiState.value.operatingMode == PsopOperatingMode.MOBILE) {
+            phoneTts().warmUp()
+        }
+    }
+
+    private fun phoneTts(): OfflinePhoneTts {
+        return phoneOfflineTts ?: OfflinePhoneTts(getApplication<Application>()) {
             viewModelScope.launch(Dispatchers.Main) {
                 _uiState.update { state ->
                     state.copy(phoneTtsCompletionSequence = state.phoneTtsCompletionSequence + 1)
                 }
             }
         }.also { phoneOfflineTts = it }
-        tts.speak(text)
     }
 
     /**
@@ -1828,6 +1838,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 val runId = response.runId ?: return@launch
                 rememberLastOpenedActiveRun(runId)
                 _uiState.update { it.copy(runId = runId) }
+                warmUpPhoneTts()
                 // 连接 WebSocket 接收实时事件
                 repository.connectWebSocket(runId)
                 // 加载新 run 的初始任务进度
@@ -1920,6 +1931,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 // 如果还在运行中，连接 WebSocket 继续会话
                 val activeStates = setOf("queued", "waiting_runtime", "accepted", "running", "waiting_input", "finalizing")
                 if (invocation.status in activeStates) {
+                    warmUpPhoneTts()
                     repository.connectWebSocket(runId)
                     // 立即同步 Run 真实状态（invocation.status 可能只是 "running"，实际 run 可能已是 "waiting_input"）
                     syncRunStatus(runId)

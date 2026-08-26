@@ -84,6 +84,16 @@ class OfflinePhoneTts(
         }
     }
 
+    /** 静默加载模型，供任务开始时预热；与播报共用队列，避免并发初始化。 */
+    fun warmUp() {
+        if (released || engine != null) return
+        scope.launch {
+            if (released || engine != null) return@launch
+            Log.d(TAG, "TTS prewarming")
+            getOrCreateEngine()
+        }
+    }
+
     fun release() {
         if (released) return
         released = true
