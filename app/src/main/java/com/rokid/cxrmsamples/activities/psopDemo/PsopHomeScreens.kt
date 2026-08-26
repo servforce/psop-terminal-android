@@ -338,7 +338,7 @@ fun PsopSkillRunsScreen(
 }
 
 @Composable
-private fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunClicked: (RunResponse) -> Unit) {
+internal fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunClicked: (RunResponse) -> Unit) {
     Surface(shape = RoundedCornerShape(24.dp), color = Color.White, modifier = Modifier.fillMaxWidth().clickable { onRunClicked(run) }) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

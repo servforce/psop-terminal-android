@@ -774,6 +774,10 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun openHistory(status: String = "running") {
+        if (_uiState.value.operatingMode == PsopOperatingMode.MOBILE) {
+            openMobileHistory(status)
+            return
+        }
         _uiState.update {
             it.copy(
                 currentScreen = InspectionScreen.HISTORY,
@@ -783,6 +787,51 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
             )
         }
         loadAllRuns(status)
+    }
+
+    /** 手机端历史记录始终绑定一个作业技能，不请求全部技能的运行记录。 */
+    private fun openMobileHistory(status: String) {
+        _uiState.update {
+            it.copy(
+                currentScreen = InspectionScreen.HISTORY,
+                runStatusFilter = status,
+                runListScope = RunListScope.ALL,
+                isLoadingInvocations = true,
+                error = null
+            )
+        }
+        viewModelScope.launch {
+            try {
+                val availableSkills = _uiState.value.skills.ifEmpty { repository.listSkills() }
+                val selectedId = _uiState.value.selectedSkill?.id
+                val selectedSkill = availableSkills.firstOrNull { it.id == selectedId }
+                    ?: availableSkills.firstOrNull()
+                val runs = selectedSkill?.let {
+                    repository.listRuns(it.id, statusListFor(status))
+                }.orEmpty()
+                _uiState.update {
+                    it.copy(
+                        skills = availableSkills,
+                        selectedSkill = selectedSkill,
+                        invocations = runs,
+                        isLoadingInvocations = false
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load mobile history", e)
+                _uiState.update {
+                    it.copy(
+                        isLoadingInvocations = false,
+                        error = "加载历史记录失败: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    fun selectMobileHistorySkill(skill: SkillSummaryResponse) {
+        _uiState.update { it.copy(selectedSkill = skill, error = null) }
+        loadRuns(skill.id, _uiState.value.runStatusFilter)
     }
 
     private fun statusListFor(status: String?): List<String>? = when (status) {

@@ -61,6 +61,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardVoice
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
@@ -74,6 +75,8 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -515,6 +518,102 @@ private fun mobileSkillIntroduction(skill: SkillSummaryResponse): String = when 
     skill.name.contains("维修") -> "根据现场引导完成设备检查、修正与维修结果核验。"
     skill.name.contains("巡检") -> "按照标准巡检路径完成检查，并记录现场结果。"
     else -> "跟随现场引导完成本次作业，并在关键步骤获取 AI 核验结果。"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MobileHistoryScreen(
+    uiState: PsopDemoUiState,
+    onSkillSelected: (SkillSummaryResponse) -> Unit,
+    onStatusChanged: (String) -> Unit,
+    onRunClicked: (RunResponse) -> Unit,
+    onBack: () -> Unit
+) {
+    BackHandler(onBack = onBack)
+    val statuses = listOf("running" to "运行中", "succeeded" to "已完成", "aborted" to "已中止", "cancelled" to "已取消")
+    var showSkillMenu by remember { mutableStateOf(false) }
+    val selectedSkill = uiState.selectedSkill
+    Scaffold(containerColor = Color(0xFFF5F7FA)) { padding ->
+        Column(Modifier.padding(padding).padding(horizontal = 24.dp, vertical = 20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("历史记录", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Default.Home, contentDescription = "返回首页", tint = Color(0xFF6B7688))
+                }
+            }
+            Text("作业技能", color = Color(0xFF6B7688), fontSize = 12.sp, modifier = Modifier.padding(top = 20.dp, bottom = 7.dp))
+            Box {
+                Surface(
+                    color = Color.White,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, Color(0xFFE0E7F0)),
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable {
+                        showSkillMenu = true
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(selectedSkill?.name ?: "正在加载作业技能…", modifier = Modifier.weight(1f))
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "选择作业技能", tint = Color(0xFF6B7688))
+                    }
+                }
+                DropdownMenu(expanded = showSkillMenu, onDismissRequest = { showSkillMenu = false }) {
+                    uiState.skills.forEach { skill ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(skill.name, color = if (skill.id == selectedSkill?.id) MobileBlue else Color.Unspecified)
+                            },
+                            onClick = {
+                                showSkillMenu = false
+                                if (skill.id != selectedSkill?.id) onSkillSelected(skill)
+                            }
+                        )
+                    }
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                statuses.forEach { (value, label) ->
+                    val selected = value == uiState.runStatusFilter
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (selected) MobileBlue else Color.White,
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable {
+                            if (!selected && selectedSkill != null) onStatusChanged(value)
+                        }
+                    ) {
+                        Text(
+                            label,
+                            color = if (selected) Color.White else Color(0xFF485467),
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
+            when {
+                uiState.isLoadingInvocations -> Text("正在加载…", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
+                selectedSkill == null -> Text("暂无可用作业技能", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
+                uiState.invocations.isEmpty() -> {
+                    val label = statuses.firstOrNull { it.first == uiState.runStatusFilter }?.second ?: "当前"
+                    Text("暂无${selectedSkill.name}的${label}记录", color = Color(0xFF6B7688), modifier = Modifier.padding(top = 36.dp))
+                }
+                else -> LazyColumn(
+                    contentPadding = PaddingValues(top = 22.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(uiState.invocations, key = { it.id }) { run ->
+                        HistoryRunCard(run, uiState, onRunClicked)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

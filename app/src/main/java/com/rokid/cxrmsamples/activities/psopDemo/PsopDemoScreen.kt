@@ -247,12 +247,26 @@ fun PsopDemoScreen(
             onRunClicked = { viewModel.resumeInvocation(it) },
             onBack = { viewModel.navigateBack() }
         )
-        InspectionScreen.HISTORY -> PsopHistoryScreen(
-            uiState = uiState,
-            onStatusChanged = { viewModel.loadAllRuns(it) },
-            onRunClicked = { viewModel.resumeInvocation(it) },
-            onBack = { viewModel.navigateBack() }
-        )
+        InspectionScreen.HISTORY -> {
+            if (uiState.operatingMode == PsopOperatingMode.MOBILE) {
+                MobileHistoryScreen(
+                    uiState = uiState,
+                    onSkillSelected = viewModel::selectMobileHistorySkill,
+                    onStatusChanged = { status ->
+                        uiState.selectedSkill?.id?.let { viewModel.loadRuns(it, status) }
+                    },
+                    onRunClicked = viewModel::resumeInvocation,
+                    onBack = viewModel::navigateBack
+                )
+            } else {
+                PsopHistoryScreen(
+                    uiState = uiState,
+                    onStatusChanged = { viewModel.loadAllRuns(it) },
+                    onRunClicked = { viewModel.resumeInvocation(it) },
+                    onBack = { viewModel.navigateBack() }
+                )
+            }
+        }
         InspectionScreen.INTERACTION -> {
             if (uiState.operatingMode == PsopOperatingMode.MOBILE) {
                 if (isMobileTaskActive(uiState)) {
