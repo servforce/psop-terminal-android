@@ -1267,9 +1267,6 @@ internal fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
     val currentStage = taskStatus.stages.find { it.id == taskStatus.currentStageId }
     val stageTitle = currentStage?.title?.takeIf { it.isNotBlank() } ?: task?.skillName ?: "任务进行中"
     val stageGoal = currentStage?.goal?.takeIf { it.isNotBlank() }
-    val statusReason = currentStage?.statusReason?.trim().orEmpty()
-    val shouldShowStatusReason = statusReason.isNotBlank() && statusReason != stageGoal &&
-        currentStage?.status in setOf("waiting_input", "failed", "aborted", "cancelled")
     var isExpanded by rememberSaveable { mutableStateOf(true) }
     Surface(
         color = Color.White,
@@ -1317,20 +1314,6 @@ internal fun TaskProgressPanel(taskStatus: TaskStatusResponse) {
                         Row(Modifier.fillMaxWidth().padding(top = 22.dp)) {
                             Text("${progress.completed} / ${progress.total} 完成", color = PsopTextSecondary, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                             Text("${progress.percent}%", color = Color(0xFF2E66E9), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        }
-                    }
-                    if (shouldShowStatusReason) {
-                        Surface(
-                            color = Color(0xFFFFF3DF),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
-                        ) {
-                            Text(
-                                text = statusReason,
-                                color = Color(0xFF9A5B00),
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-                            )
                         }
                     }
                     LazyColumn(
