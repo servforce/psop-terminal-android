@@ -46,21 +46,38 @@ class OfflinePhoneTts(
 
     /** 新回复到来时替换上一条尚未播放完的播报。 */
     fun speak(text: String) {
-        if (released) return
+        if (released) {
+            Log.w(TAG, "TTS request ignored: engine already released")
+            return
+        }
         val content = text.trim()
-        if (content.isEmpty()) return
+        if (content.isEmpty()) {
+            Log.w(TAG, "TTS request ignored: empty content")
+            return
+        }
 
+        Log.d(TAG, "TTS requested: chars=${content.length}")
         playbackJob?.cancel()
         playbackJob = scope.launch {
             stopActiveTrack()
             val tts = getOrCreateEngine() ?: return@launch
-            if (!isActive) return@launch
+            if (!isActive) {
+                Log.d(TAG, "TTS cancelled before synthesis")
+                return@launch
+            }
 
             try {
                 val audio = tts.generate(text = content, sid = SPEAKER_ID, speed = SPEECH_SPEED)
-                if (!isActive || audio.samples.isEmpty()) return@launch
+                Log.d(TAG, "TTS synthesized: samples=${audio.samples.size}, sampleRate=${audio.sampleRate}")
+                if (!isActive || audio.samples.isEmpty()) {
+                    Log.w(TAG, "TTS playback skipped: active=$isActive, samples=${audio.samples.size}")
+                    return@launch
+                }
                 play(audio.samples, audio.sampleRate)
-                if (isActive) onPlaybackCompleted()
+                if (isActive) {
+                    Log.d(TAG, "TTS playback completed")
+                    onPlaybackCompleted()
+                }
             } catch (error: Exception) {
                 Log.e(TAG, "Offline phone TTS generation failed", error)
             }
@@ -178,9 +195,11 @@ class OfflinePhoneTts(
         activeTrack = track
 
         try {
+            Log.d(TAG, "AudioTrack ready: state=${track.state}, bufferBytes=$minBufferSize, pcmSamples=${pcm.size}")
             val startedAt = SystemClock.elapsedRealtime()
             track.play()
-            track.write(pcm, 0, pcm.size, AudioTrack.WRITE_BLOCKING)
+            val writtenSamples = track.write(pcm, 0, pcm.size, AudioTrack.WRITE_BLOCKING)
+            Log.d(TAG, "AudioTrack write: result=$writtenSamples, playState=${track.playState}")
             val audioDurationMs = pcm.size * 1000L / sampleRate
             val remainingMs = (audioDurationMs - (SystemClock.elapsedRealtime() - startedAt)).coerceAtLeast(0)
             if (currentCoroutineContext().isActive && remainingMs > 0) delay(remainingMs)
