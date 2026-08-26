@@ -884,8 +884,18 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingInvocations = true, runStatusFilter = status) }
             try {
+                // “全部技能”仅指当前可用的技能集合；已删除或禁用而不再出现在技能列表中的记录不展示。
+                val availableSkills = repository.listSkills()
+                val availableSkillIds = availableSkills.mapTo(mutableSetOf()) { it.id }
                 val runs = repository.listRuns(status = statusListFor(status))
-                _uiState.update { it.copy(invocations = runs, isLoadingInvocations = false) }
+                    .filter { it.skillDefinitionId in availableSkillIds }
+                _uiState.update {
+                    it.copy(
+                        skills = availableSkills,
+                        invocations = runs,
+                        isLoadingInvocations = false
+                    )
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load all runs", e)
                 _uiState.update { it.copy(isLoadingInvocations = false, error = "加载历史记录失败: ${e.message}") }
