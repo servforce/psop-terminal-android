@@ -33,6 +33,7 @@ class PsopWebSocketManager(
     private var currentRunId: String? = null
     private var reconnectAttempts = 0
     private var reconnectJob: Job? = null
+    private var connectionToken = 0L
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     var lastReceivedSeq: Int = 0
         private set
@@ -58,12 +59,14 @@ class PsopWebSocketManager(
     }
 
     private fun doConnect(runId: String) {
+        val token = ++connectionToken
         _connectionState.value = ConnectionState.CONNECTING
         val url = "${PsopConfig.wsUrl}/runs/$runId"
         val request = Request.Builder().url(url).build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (!isCurrentConnection(runId, token)) return
                 _connectionState.value = ConnectionState.CONNECTED
                 reconnectAttempts = 0
 
@@ -80,6 +83,7 @@ class PsopWebSocketManager(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                if (!isCurrentConnection(runId, token)) return
                 try {
                     // DEBUG: 打印所有 WebSocket 消息
                     android.util.Log.d("PSOP_DEBUG", "WS RAW [${text.length}chars]: ${text.take(500)}")
@@ -92,18 +96,25 @@ class PsopWebSocketManager(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (!isCurrentConnection(runId, token)) return
                 _connectionState.value = ConnectionState.RECONNECTING
-                scheduleReconnect()
+                scheduleReconnect(runId, token)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                _connectionState.value = ConnectionState.DISCONNECTED
+                if (!isCurrentConnection(runId, token)) return
+                _connectionState.value = ConnectionState.RECONNECTING
+                scheduleReconnect(runId, token)
             }
         })
     }
 
-    private fun scheduleReconnect() {
-        val runId = currentRunId ?: return
+    private fun isCurrentConnection(runId: String, token: Long): Boolean {
+        return currentRunId == runId && connectionToken == token
+    }
+
+    private fun scheduleReconnect(runId: String, token: Long) {
+        if (!isCurrentConnection(runId, token)) return
         if (reconnectAttempts >= maxReconnectAttempts) {
             _connectionState.value = ConnectionState.DISCONNECTED
             return
@@ -113,26 +124,30 @@ class PsopWebSocketManager(
             val delayMs = minOf(30000L, 1000L * (1 shl minOf(reconnectAttempts, 4)))
             reconnectAttempts++
             delay(delayMs)
+            if (!isCurrentConnection(runId, token)) return@launch
             // 重连前先检查 Run 状态
             val shouldReconnect = try {
                 onBeforeReconnect?.invoke(runId) ?: true
             } catch (e: Exception) {
                 true // 检查失败默认尝试重连
             }
-            if (shouldReconnect) {
+            if (shouldReconnect && isCurrentConnection(runId, token)) {
                 doConnect(runId)
-            } else {
+            } else if (isCurrentConnection(runId, token)) {
                 _connectionState.value = ConnectionState.DISCONNECTED
             }
         }
     }
 
     fun disconnect() {
+        ++connectionToken
         reconnectJob?.cancel()
-        webSocket?.close(1000, "Client disconnect")
+        reconnectJob = null
+        val socket = webSocket
         webSocket = null
         currentRunId = null
         lastReceivedSeq = 0
         _connectionState.value = ConnectionState.DISCONNECTED
+        socket?.close(1000, "Client disconnect")
     }
 }
