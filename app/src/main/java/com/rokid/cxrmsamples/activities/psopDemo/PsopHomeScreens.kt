@@ -3,6 +3,7 @@ package com.rokid.cxrmsamples.activities.psopDemo
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -451,6 +452,7 @@ fun PsopSkillRunsScreen(
 internal fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunClicked: (RunResponse) -> Unit) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
+    val copyInteraction = remember { MutableInteractionSource() }
     Surface(shape = RoundedCornerShape(24.dp), color = Color.White, modifier = Modifier.fillMaxWidth().clickable { onRunClicked(run) }) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -463,10 +465,19 @@ internal fun HistoryRunCard(run: RunResponse, uiState: PsopDemoUiState, onRunCli
                 Text(formatRunDate(run.createdAt), color = PsopSecondary, modifier = Modifier.weight(1f))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        clipboard.setText(AnnotatedString(run.id))
-                        Toast.makeText(context, "编号已复制", Toast.LENGTH_SHORT).show()
-                    }.padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+                    modifier = Modifier
+                        .padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+                        .clickable(
+                            interactionSource = copyInteraction,
+                            indication = null
+                        ) {
+                            clipboard.setText(AnnotatedString(run.id))
+                            Toast.makeText(
+                                context,
+                                "已复制编号：…${run.id.takeLast(8)}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
                 ) {
                     Icon(Icons.Default.ContentCopy, contentDescription = "复制编号", tint = PsopBlue, modifier = Modifier.size(16.dp))
                     Text("复制编号", color = PsopBlue, fontSize = 13.sp, modifier = Modifier.padding(start = 5.dp))
