@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,7 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -317,23 +319,59 @@ fun PsopHistoryScreen(
                 Text("历史记录", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
                 IconButton(onClick = onBack) { Icon(Icons.Default.Home, "返回首页", tint = PsopSecondary) }
             }
-            Surface(
-                color = PsopSoftBlue,
-                shape = RoundedCornerShape(28.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp).clickable { showSkillMenu = true }
-            ) {
-                Row(
-                    modifier = Modifier.padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 20.dp)) {
+                Surface(
+                    color = PsopSoftBlue,
+                    shape = RoundedCornerShape(28.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { showSkillMenu = true }
                 ) {
-                    Text("技能 · ${uiState.selectedSkill?.name ?: "正在加载…"}", color = PsopBlue, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.weight(1f))
-                    Icon(
-                        if (showSkillMenu) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = "切换任务技能",
-                        tint = PsopBlue,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("技能 · ${uiState.selectedSkill?.name ?: "正在加载…"}", color = PsopBlue, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.weight(1f))
+                        Icon(
+                            if (showSkillMenu) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = "切换任务技能",
+                            tint = PsopBlue,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+                DropdownMenu(
+                    expanded = showSkillMenu,
+                    onDismissRequest = { showSkillMenu = false },
+                    modifier = Modifier.width(maxWidth),
+                    shape = RoundedCornerShape(28.dp),
+                    containerColor = PsopSoftBlue,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(uiState.skills, key = { it.id }) { skill ->
+                            val isSelected = skill.id == uiState.selectedSkill?.id
+                            Surface(
+                                color = if (isSelected) Color.White else Color.Transparent,
+                                shape = RoundedCornerShape(20.dp),
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    showSkillMenu = false
+                                    if (!isSelected) onSkillSelected(skill)
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(skill.name, modifier = Modifier.weight(1f), fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal)
+                                    if (isSelected) Text("当前", color = PsopBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -369,38 +407,6 @@ fun PsopHistoryScreen(
                         items(uiState.invocations, key = { it.id }) { run -> HistoryRunCard(run, uiState, onRunClicked) }
                         if (uiState.isLoadingMoreHistory) {
                             item { HistoryLoadingIndicator(color = PsopBlue) }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if (showSkillMenu) {
-        ModalBottomSheet(onDismissRequest = { showSkillMenu = false }, containerColor = Color.White) {
-            Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
-                Text("选择任务技能", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("历史记录只显示所选任务", color = PsopSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 5.dp, bottom = 16.dp))
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().height(360.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(uiState.skills, key = { it.id }) { skill ->
-                        val isSelected = skill.id == uiState.selectedSkill?.id
-                        Surface(
-                            color = if (isSelected) PsopSoftBlue else Color(0xFFF7F9FC),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                showSkillMenu = false
-                                if (!isSelected) onSkillSelected(skill)
-                            }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(skill.name, modifier = Modifier.weight(1f), fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal)
-                                if (isSelected) Text("当前", color = PsopBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            }
                         }
                     }
                 }
