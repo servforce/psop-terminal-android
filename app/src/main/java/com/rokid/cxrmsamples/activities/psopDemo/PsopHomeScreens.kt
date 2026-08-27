@@ -102,7 +102,7 @@ fun PsopHomeScreen(
         bottomBar = {
             NavigationBar(containerColor = Color.White) {
                 NavigationBarItem(selected = true, onClick = {}, icon = { Icon(Icons.Default.Home, null) }, label = { Text("首页") })
-                NavigationBarItem(selected = false, onClick = { guardedClick(onOpenSkills) }, icon = { Icon(Icons.Default.List, null) }, label = { Text("任务") })
+                NavigationBarItem(selected = false, onClick = { guardedClick(onOpenSkills) }, icon = { Icon(Icons.Default.List, null) }, label = { Text("技能") })
                 NavigationBarItem(selected = false, onClick = { guardedClick(onOpenHistory) }, icon = { Icon(Icons.Default.History, null) }, label = { Text("历史") })
                 NavigationBarItem(selected = false, onClick = { guardedClick {} }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("我的") })
             }
