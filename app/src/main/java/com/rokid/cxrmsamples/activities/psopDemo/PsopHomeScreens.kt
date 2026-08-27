@@ -319,13 +319,13 @@ fun PsopHistoryScreen(
             Surface(
                 color = PsopSoftBlue,
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.clickable { showSkillMenu = true }
+                modifier = Modifier.fillMaxWidth().clickable { showSkillMenu = true }
             ) {
                 Row(
                     modifier = Modifier.padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("任务 · ${uiState.selectedSkill?.name ?: "正在加载…"}", color = PsopBlue, fontWeight = FontWeight.SemiBold)
+                    Text("技能点 · ${uiState.selectedSkill?.name ?: "正在加载…"}", color = PsopBlue, fontWeight = FontWeight.SemiBold)
                     Icon(
                         Icons.Default.KeyboardArrowDown,
                         contentDescription = "切换任务技能",
