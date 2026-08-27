@@ -219,6 +219,7 @@ fun PsopDemoScreen(
                 it.skillDefinitionId == uiState.selectedSkill?.id && it.status in MobileActiveRunStatuses
             },
             isLoading = uiState.isLoadingInvocations,
+            operatingMode = uiState.operatingMode,
             onStartNew = viewModel::startSkill,
             onResume = viewModel::resumeInvocation,
             onBack = viewModel::navigateBack

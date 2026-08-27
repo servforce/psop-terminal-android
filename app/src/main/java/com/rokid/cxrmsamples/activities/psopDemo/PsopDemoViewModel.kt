@@ -756,19 +756,14 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun selectSkill(skill: SkillSummaryResponse) {
-        val isMobileMode = _uiState.value.operatingMode == PsopOperatingMode.MOBILE
         _uiState.update {
             it.copy(
                 selectedSkill = skill,
-                currentScreen = if (isMobileMode) {
-                    InspectionScreen.MOBILE_SKILL_DETAIL
-                } else {
-                    InspectionScreen.INVOCATION_LIST
-                },
+                currentScreen = InspectionScreen.MOBILE_SKILL_DETAIL,
                 runListScope = RunListScope.SKILL
             )
         }
-        // 手机任务详情只借助运行状态判断是否有可继续的任务，不在此展示历史列表。
+        // 任务说明页只借助运行状态判断是否有可继续的任务，不在此展示历史列表。
         loadRuns(skill.id)
     }
 
@@ -1109,8 +1104,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                     it.copy(
                         currentScreen = when {
                             returnToHistory -> InspectionScreen.HISTORY
-                            it.operatingMode == PsopOperatingMode.MOBILE -> InspectionScreen.MOBILE_SKILL_DETAIL
-                            else -> InspectionScreen.INVOCATION_LIST
+                            else -> InspectionScreen.MOBILE_SKILL_DETAIL
                         }
                     )
                 }

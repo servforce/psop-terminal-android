@@ -444,6 +444,7 @@ fun MobileSkillDetailScreen(
     skill: SkillSummaryResponse?,
     activeRun: RunResponse?,
     isLoading: Boolean,
+    operatingMode: PsopOperatingMode,
     onStartNew: () -> Unit,
     onResume: (RunResponse) -> Unit,
     onBack: () -> Unit
@@ -451,6 +452,16 @@ fun MobileSkillDetailScreen(
     BackHandler(onBack = onBack)
     val task = skill ?: return
     val introduction = mobileSkillIntroduction(task)
+    val workMethod = if (operatingMode == PsopOperatingMode.GLASSES) {
+        "启动后通过眼镜端语音提示和画面引导完成步骤，在关键节点获取 AI 核验结果。"
+    } else {
+        "启动后进入手机 AR 实时画面，按任务步骤操作；完成后由 AI 对现场结果进行核验。"
+    }
+    val taskFlow = if (operatingMode == PsopOperatingMode.GLASSES) {
+        "启动任务 → 跟随眼镜引导 → 完成关键操作 → 获取核验结果"
+    } else {
+        "启动任务 → 跟随现场引导 → 提交关键画面 → 获取核验结果"
+    }
     Scaffold(
         containerColor = Color(0xFFF5F7FA),
         topBar = {
@@ -511,13 +522,13 @@ fun MobileSkillDetailScreen(
             item {
                 MobileTaskInfoCard(
                     title = "作业方式",
-                    content = "启动后进入手机 AR 实时画面，按任务步骤操作；完成后由 AI 对现场结果进行核验。"
+                    content = workMethod
                 )
             }
             item {
                 MobileTaskInfoCard(
                     title = "任务流程",
-                    content = "启动任务 → 跟随现场引导 → 提交关键画面 → 获取核验结果"
+                    content = taskFlow
                 )
             }
         }
