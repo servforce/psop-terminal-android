@@ -806,11 +806,11 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 error = null
             )
         }
-        loadAllRuns(status, page = 1)
+        loadSelectedHistory(status, page = 1)
     }
 
-    /** 手机端历史记录始终绑定一个作业技能，不请求全部技能的运行记录。 */
-    private fun openMobileHistory(status: String, page: Int, isPullRefresh: Boolean = false) {
+    /** 历史记录按当前所选任务技能查询，切换任务、筛选、刷新和分页均复用该路径。 */
+    private fun loadSelectedHistory(status: String, page: Int, isPullRefresh: Boolean = false) {
         val requestVersion = ++historyRequestVersion
         val append = page > 1
         _uiState.update {
@@ -862,7 +862,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                 }
             } catch (e: Exception) {
                 if (requestVersion != historyRequestVersion) return@launch
-                Log.e(TAG, "Failed to load mobile history", e)
+                Log.e(TAG, "Failed to load selected history", e)
                 _uiState.update {
                     it.copy(
                         isLoadingInvocations = false,
@@ -875,9 +875,9 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun selectMobileHistorySkill(skill: SkillSummaryResponse) {
+    fun selectHistorySkill(skill: SkillSummaryResponse) {
         _uiState.update { it.copy(selectedSkill = skill, error = null) }
-        openMobileHistory(_uiState.value.runStatusFilter, page = 1)
+        loadSelectedHistory(_uiState.value.runStatusFilter, page = 1)
     }
 
     /** 历史记录下拉刷新从第一页开始；滚动到底时仅追加下一页。 */
@@ -890,7 +890,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun loadHistoryPage(page: Int, isPullRefresh: Boolean = false) {
-        loadAllRuns(_uiState.value.runStatusFilter, page, isPullRefresh)
+        loadSelectedHistory(_uiState.value.runStatusFilter, page, isPullRefresh)
     }
 
     private fun statusListFor(status: String?): List<String>? = when (status) {
@@ -1115,7 +1115,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                     )
                 }
                 if (returnToHistory) {
-                    loadAllRuns()
+                    loadSelectedHistory(_uiState.value.runStatusFilter, page = 1)
                 } else {
                     _uiState.value.selectedSkill?.id?.let { loadRuns(it) }
                 }

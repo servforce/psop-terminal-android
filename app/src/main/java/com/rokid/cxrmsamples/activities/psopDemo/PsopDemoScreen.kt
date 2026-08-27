@@ -249,6 +249,7 @@ fun PsopDemoScreen(
         )
         InspectionScreen.HISTORY -> PsopHistoryScreen(
             uiState = uiState,
+            onSkillSelected = viewModel::selectHistorySkill,
             onStatusChanged = viewModel::openHistory,
             onRefresh = viewModel::refreshHistory,
             onLoadNextPage = viewModel::loadNextHistoryPage,

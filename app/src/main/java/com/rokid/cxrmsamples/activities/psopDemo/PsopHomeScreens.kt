@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -36,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -44,7 +46,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rokid.cxrmsamples.network.models.RunResponse
+import com.rokid.cxrmsamples.network.models.SkillSummaryResponse
 import java.util.Calendar
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -286,6 +292,7 @@ fun HomeRecentRunCard(run: RunResponse, uiState: PsopDemoUiState, onResumeRun: (
 @Composable
 fun PsopHistoryScreen(
     uiState: PsopDemoUiState,
+    onSkillSelected: (SkillSummaryResponse) -> Unit,
     onStatusChanged: (String) -> Unit,
     onRefresh: () -> Unit,
     onLoadNextPage: () -> Unit,
@@ -294,6 +301,7 @@ fun PsopHistoryScreen(
 ) {
     BackHandler(onBack = onBack)
     val statuses = listOf("running" to "运行中", "succeeded" to "已完成", "aborted" to "已中止", "cancelled" to "已取消")
+    var showSkillMenu by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     HistoryAutoLoadMore(
         listState = listState,
@@ -307,7 +315,26 @@ fun PsopHistoryScreen(
                 Text("历史记录", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
                 IconButton(onClick = onBack) { Icon(Icons.Default.Home, "返回首页", tint = PsopSecondary) }
             }
-            Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("当前任务", color = PsopSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 20.dp, bottom = 7.dp))
+            Surface(
+                color = PsopSoftBlue,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.clickable { showSkillMenu = true }
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("任务 · ${uiState.selectedSkill?.name ?: "正在加载…"}", color = PsopBlue, fontWeight = FontWeight.SemiBold)
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "切换任务技能",
+                        tint = PsopBlue,
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 statuses.forEach { (value, label) ->
                     val selected = value == uiState.runStatusFilter
                     Surface(
@@ -340,6 +367,38 @@ fun PsopHistoryScreen(
                         items(uiState.invocations, key = { it.id }) { run -> HistoryRunCard(run, uiState, onRunClicked) }
                         if (uiState.isLoadingMoreHistory) {
                             item { HistoryLoadingIndicator(color = PsopBlue) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showSkillMenu) {
+        ModalBottomSheet(onDismissRequest = { showSkillMenu = false }, containerColor = Color.White) {
+            Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
+                Text("选择任务技能", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("历史记录只显示所选任务", color = PsopSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 5.dp, bottom = 16.dp))
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().height(360.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(uiState.skills, key = { it.id }) { skill ->
+                        val isSelected = skill.id == uiState.selectedSkill?.id
+                        Surface(
+                            color = if (isSelected) PsopSoftBlue else Color(0xFFF7F9FC),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                showSkillMenu = false
+                                if (!isSelected) onSkillSelected(skill)
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(skill.name, modifier = Modifier.weight(1f), fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal)
+                                if (isSelected) Text("当前", color = PsopBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
                         }
                     }
                 }
