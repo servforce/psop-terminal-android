@@ -48,7 +48,6 @@ fun BluetoothConnectionScreen(
     clear: () -> Unit,
     onDisconnect: () -> Unit,
     onConnected: () -> Unit,
-    onStartInspection: () -> Unit,
     onBack: () -> Unit
 ) {
     val recordState = viewModel.recordState.collectAsState()
@@ -82,10 +81,6 @@ fun BluetoothConnectionScreen(
                 }
             }
             Spacer(Modifier.weight(1f))
-            Button(onClick = onStartInspection, modifier = Modifier.fillMaxWidth().height(64.dp), shape = RoundedCornerShape(22.dp)) {
-                Text("开始巡检", fontSize = 20.sp)
-            }
-            Spacer(Modifier.height(18.dp))
             OutlinedButton(
                 onClick = onDisconnect,
                 modifier = Modifier.fillMaxWidth().height(56.dp),

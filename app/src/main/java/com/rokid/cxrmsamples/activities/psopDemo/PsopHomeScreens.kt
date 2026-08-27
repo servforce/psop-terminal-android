@@ -2,6 +2,7 @@ package com.rokid.cxrmsamples.activities.psopDemo
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -315,22 +316,23 @@ fun PsopHistoryScreen(
                 Text("历史记录", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
                 IconButton(onClick = onBack) { Icon(Icons.Default.Home, "返回首页", tint = PsopSecondary) }
             }
-            Text("当前任务", color = PsopSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 20.dp, bottom = 7.dp))
             Surface(
-                color = PsopSoftBlue,
+                color = Color.White,
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().clickable { showSkillMenu = true }
+                border = BorderStroke(1.dp, PsopOutline),
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp).clickable { showSkillMenu = true }
             ) {
                 Row(
                     modifier = Modifier.padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("技能点 · ${uiState.selectedSkill?.name ?: "正在加载…"}", color = PsopBlue, fontWeight = FontWeight.SemiBold)
+                    Text("技能 · ${uiState.selectedSkill?.name ?: "正在加载…"}", color = PsopBlue, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.weight(1f))
                     Icon(
                         Icons.Default.KeyboardArrowDown,
                         contentDescription = "切换任务技能",
                         tint = PsopBlue,
-                        modifier = Modifier.padding(start = 6.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
