@@ -960,7 +960,12 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                     // 本机记录已终态或不可见，移除后避免下次继续尝试陈旧任务。
                     clearLastOpenedActiveRun()
                 }
-                val recentRun = runs.firstOrNull()
+                // 眼镜首页仅展示仍可继续的任务，避免把已结束的记录误显示为“最近任务”。
+                val recentRun = if (_uiState.value.operatingMode == PsopOperatingMode.GLASSES) {
+                    activeRuns.firstOrNull()
+                } else {
+                    runs.firstOrNull()
+                }
                 val recentProgress = recentRun
                     ?.takeIf(::isActiveRun)
                     ?.let { loadHistoryRunProgress(listOf(it))[it.id] }
