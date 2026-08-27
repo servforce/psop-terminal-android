@@ -351,6 +351,7 @@ fun MobileSkillListScreen(
     skills: List<SkillSummaryResponse>,
     isLoading: Boolean,
     error: String?,
+    title: String = "任务",
     onSkillSelected: (SkillSummaryResponse) -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit
@@ -360,7 +361,7 @@ fun MobileSkillListScreen(
         containerColor = Color(0xFFF5F7FA),
         topBar = {
             TopAppBar(
-                title = { Text("任务", fontWeight = FontWeight.Medium) },
+                title = { Text(title, fontWeight = FontWeight.Medium) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
