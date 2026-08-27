@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -78,18 +77,26 @@ fun PsopHomeScreen(
     onOpenSdkDebug: () -> Unit,
     onResumeRun: (RunResponse) -> Unit
 ) {
-    val activeRun = uiState.homeResumeRun
     val recentRun = uiState.homeRecentRun
     val greeting = homeGreeting()
-    val actionHint = homeActionHint(activeRun, recentRun)
+    val context = LocalContext.current
+    val isConnected = uiState.isGlassesConnected
+    val actionHint = if (isConnected) {
+        homeActionHint(uiState.homeResumeRun, recentRun)
+    } else {
+        "请先连接眼镜以使用巡检功能"
+    }
+    fun guardedClick(onAllowed: () -> Unit) {
+        if (isConnected) onAllowed() else Toast.makeText(context, "请先连接眼镜", Toast.LENGTH_SHORT).show()
+    }
     Scaffold(
         containerColor = PsopPage,
         bottomBar = {
             NavigationBar(containerColor = Color.White) {
                 NavigationBarItem(selected = true, onClick = {}, icon = { Icon(Icons.Default.Home, null) }, label = { Text("首页") })
-                NavigationBarItem(selected = false, onClick = onOpenSkills, icon = { Icon(Icons.Default.List, null) }, label = { Text("任务") })
-                NavigationBarItem(selected = false, onClick = onOpenHistory, icon = { Icon(Icons.Default.History, null) }, label = { Text("历史") })
-                NavigationBarItem(selected = false, onClick = {}, icon = { Icon(Icons.Default.Person, null) }, label = { Text("我的") })
+                NavigationBarItem(selected = false, onClick = { guardedClick(onOpenSkills) }, icon = { Icon(Icons.Default.List, null) }, label = { Text("任务") })
+                NavigationBarItem(selected = false, onClick = { guardedClick(onOpenHistory) }, icon = { Icon(Icons.Default.History, null) }, label = { Text("历史") })
+                NavigationBarItem(selected = false, onClick = { guardedClick {} }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("我的") })
             }
         }
     ) { padding ->
@@ -112,32 +119,20 @@ fun PsopHomeScreen(
                 DeviceSummaryCard(uiState, onOpenDeviceConnection)
             }
             item {
-                Button(
-                    onClick = { activeRun?.let(onResumeRun) ?: onOpenSkills() },
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PsopBlue)
-                ) {
-                    Icon(if (activeRun == null) Icons.Default.PlayArrow else Icons.Default.PlayArrow, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (activeRun == null) "开始巡检" else "继续巡检", fontSize = 22.sp)
-                }
-            }
-            item {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HomeShortcut("历史记录", Icons.Default.History, Modifier.weight(1f), onOpenHistory)
-                    HomeShortcut("巡检技能", Icons.Default.List, Modifier.weight(1f), onOpenSkills)
+                    HomeShortcut("任务技能", Icons.Default.List, Modifier.weight(1f)) { guardedClick(onOpenSkills) }
+                    HomeShortcut("历史记录", Icons.Default.History, Modifier.weight(1f)) { guardedClick(onOpenHistory) }
                 }
             }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("最近任务", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-                    Text("查看全部", color = PsopBlue, modifier = Modifier.clickable(onClick = onOpenHistory))
+                    Text("查看全部", color = PsopBlue, modifier = Modifier.clickable { guardedClick(onOpenHistory) })
                 }
             }
-            if (recentRun != null) {
+            if (isConnected && recentRun != null) {
                 item { HomeRecentRunCard(recentRun, uiState, onResumeRun) }
-            } else if (!uiState.isLoadingHomeRuns) {
+            } else if (isConnected && !uiState.isLoadingHomeRuns) {
                 item {
                     Text("暂无巡检记录", color = PsopSecondary, modifier = Modifier.padding(vertical = 16.dp))
                 }

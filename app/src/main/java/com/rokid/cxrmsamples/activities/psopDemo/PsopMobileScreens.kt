@@ -742,7 +742,7 @@ fun PsopMobileHomeScreen(
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HomeShortcut("作业技能", Icons.Default.List, Modifier.weight(1f), onOpenSkills)
+                    HomeShortcut("任务技能", Icons.Default.List, Modifier.weight(1f), onOpenSkills)
                     HomeShortcut("历史记录", Icons.Default.History, Modifier.weight(1f), onOpenHistory)
                 }
             }

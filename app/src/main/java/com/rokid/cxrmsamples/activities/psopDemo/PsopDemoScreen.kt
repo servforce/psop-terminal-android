@@ -181,7 +181,7 @@ fun PsopDemoScreen(
     android.util.Log.d("PSOP_DEBUG", "PsopDemoScreen: currentScreen=${uiState.currentScreen}")
     when (uiState.currentScreen) {
         InspectionScreen.MODE_SELECTION -> PsopModeSelectionScreen(
-            onGlassesMode = onOpenDeviceConnection,
+            onGlassesMode = { viewModel.selectOperatingMode(PsopOperatingMode.GLASSES) },
             onMobileMode = { viewModel.selectOperatingMode(PsopOperatingMode.MOBILE) }
         )
         InspectionScreen.HOME -> {
@@ -247,28 +247,14 @@ fun PsopDemoScreen(
             onRunClicked = { viewModel.resumeInvocation(it) },
             onBack = { viewModel.navigateBack() }
         )
-        InspectionScreen.HISTORY -> {
-            if (uiState.operatingMode == PsopOperatingMode.MOBILE) {
-                MobileHistoryScreen(
-                    uiState = uiState,
-                    onSkillSelected = viewModel::selectMobileHistorySkill,
-                    onStatusChanged = viewModel::openHistory,
-                    onRefresh = viewModel::refreshHistory,
-                    onLoadNextPage = viewModel::loadNextHistoryPage,
-                    onRunClicked = viewModel::resumeInvocation,
-                    onBack = viewModel::navigateBack
-                )
-            } else {
-                PsopHistoryScreen(
-                    uiState = uiState,
-                    onStatusChanged = viewModel::openHistory,
-                    onRefresh = viewModel::refreshHistory,
-                    onLoadNextPage = viewModel::loadNextHistoryPage,
-                    onRunClicked = { viewModel.resumeInvocation(it) },
-                    onBack = { viewModel.navigateBack() }
-                )
-            }
-        }
+        InspectionScreen.HISTORY -> PsopHistoryScreen(
+            uiState = uiState,
+            onStatusChanged = viewModel::openHistory,
+            onRefresh = viewModel::refreshHistory,
+            onLoadNextPage = viewModel::loadNextHistoryPage,
+            onRunClicked = { viewModel.resumeInvocation(it) },
+            onBack = { viewModel.navigateBack() }
+        )
         InspectionScreen.INTERACTION -> {
             if (uiState.operatingMode == PsopOperatingMode.MOBILE) {
                 if (isMobileTaskActive(uiState)) {

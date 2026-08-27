@@ -798,10 +798,6 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun openHistory(status: String = "running") {
-        if (_uiState.value.operatingMode == PsopOperatingMode.MOBILE) {
-            openMobileHistory(status, page = 1)
-            return
-        }
         _uiState.update {
             it.copy(
                 currentScreen = InspectionScreen.HISTORY,
@@ -894,12 +890,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun loadHistoryPage(page: Int, isPullRefresh: Boolean = false) {
-        val state = _uiState.value
-        if (state.operatingMode == PsopOperatingMode.MOBILE) {
-            openMobileHistory(state.runStatusFilter, page, isPullRefresh)
-        } else {
-            loadAllRuns(state.runStatusFilter, page, isPullRefresh)
-        }
+        loadAllRuns(_uiState.value.runStatusFilter, page, isPullRefresh)
     }
 
     private fun statusListFor(status: String?): List<String>? = when (status) {
@@ -1124,11 +1115,7 @@ class PsopDemoViewModel(application: Application) : AndroidViewModel(application
                     )
                 }
                 if (returnToHistory) {
-                    if (_uiState.value.operatingMode == PsopOperatingMode.MOBILE) {
-                        openMobileHistory(_uiState.value.runStatusFilter, page = 1)
-                    } else {
-                        loadAllRuns()
-                    }
+                    loadAllRuns()
                 } else {
                     _uiState.value.selectedSkill?.id?.let { loadRuns(it) }
                 }
