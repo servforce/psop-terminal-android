@@ -155,7 +155,7 @@ fun homeGreeting(hourOfDay: Int = Calendar.getInstance().get(Calendar.HOUR_OF_DA
 }
 
 fun homeActionHint(activeRun: RunResponse?, recentRun: RunResponse?): String = when {
-    activeRun != null -> "你有一项巡检正在进行，继续完成它吧"
+    activeRun != null -> "你有一项任务正在进行，继续完成它吧"
     recentRun != null -> "上次巡检已完成，开始新的巡检吧"
     else -> "准备开始今天的巡检吧"
 }
