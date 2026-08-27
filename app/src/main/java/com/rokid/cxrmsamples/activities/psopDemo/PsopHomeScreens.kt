@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -317,9 +318,8 @@ fun PsopHistoryScreen(
                 IconButton(onClick = onBack) { Icon(Icons.Default.Home, "返回首页", tint = PsopSecondary) }
             }
             Surface(
-                color = Color.White,
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, PsopOutline),
+                color = PsopSoftBlue,
+                shape = RoundedCornerShape(28.dp),
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp).clickable { showSkillMenu = true }
             ) {
                 Row(
@@ -329,7 +329,7 @@ fun PsopHistoryScreen(
                     Text("技能 · ${uiState.selectedSkill?.name ?: "正在加载…"}", color = PsopBlue, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.weight(1f))
                     Icon(
-                        Icons.Default.KeyboardArrowDown,
+                        if (showSkillMenu) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                         contentDescription = "切换任务技能",
                         tint = PsopBlue,
                         modifier = Modifier.size(24.dp)
