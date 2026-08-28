@@ -116,6 +116,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import com.rokid.cxrmsamples.asr.SherpaAsrEngine
 import com.rokid.cxrmsamples.network.models.RunResponse
 import com.rokid.cxrmsamples.network.models.SkillSummaryResponse
@@ -146,8 +149,20 @@ internal fun isMobileTaskActive(uiState: PsopDemoUiState): Boolean =
 
 private const val MOBILE_ASR_SAMPLE_RATE = 16_000
 private const val MOBILE_ASR_VOICE_RMS_THRESHOLD = 150.0
+private const val MOBILE_WAKE_WORD = "你好智能助手"
+private const val MOBILE_WAKE_ANALYSIS_INTERVAL_MS = 1_200L
+private const val MOBILE_WAKE_COMMAND_TIMEOUT_MS = 6_000L
 
 private data class MobileAsrResult(val text: String? = null, val error: String? = null)
+private val mobileAsrRecognitionMutex = Mutex()
+
+private enum class MobileWakeState {
+    WAITING_WAKE_WORD,
+    WAITING_COMMAND
+}
+
+private fun normalizeMobileSpeech(text: String): String =
+    text.replace(Regex("[\\s，。！？、,.!?]"), "")
 
 /**
  * 手机端独立录音入口。只采集手机麦克风的 16kHz PCM，识别仍使用项目已有的
@@ -157,7 +172,6 @@ private class MobileOfflineAsrRecorder(context: Context) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val outputLock = Any()
-    private val recognitionMutex = Mutex()
     private var output = ByteArrayOutputStream()
     private var audioRecord: AudioRecord? = null
     private var captureJob: Job? = null
@@ -247,7 +261,7 @@ private class MobileOfflineAsrRecorder(context: Context) {
         if (!hasDetectedVoice) {
             return@withContext MobileAsrResult(error = "未检测到语音，请重试")
         }
-        val text = recognitionMutex.withLock {
+        val text = mobileAsrRecognitionMutex.withLock {
             if (!SherpaAsrEngine.initialize(appContext)) return@withLock null
             SherpaAsrEngine.recognize(pcm).trim()
         } ?: return@withContext MobileAsrResult(error = "离线语音模型初始化失败")
@@ -261,7 +275,7 @@ private class MobileOfflineAsrRecorder(context: Context) {
     suspend fun recognizeCurrentAudio(): String? = withContext(Dispatchers.IO) {
         val pcm = synchronized(outputLock) { output.toByteArray() }
         if (pcm.size < MOBILE_ASR_SAMPLE_RATE || !hasDetectedVoice) return@withContext null
-        recognitionMutex.withLock {
+        mobileAsrRecognitionMutex.withLock {
             if (!SherpaAsrEngine.initialize(appContext)) return@withLock null
             SherpaAsrEngine.recognize(pcm).trim().takeIf { it.isNotBlank() }
         }
@@ -281,6 +295,147 @@ private class MobileOfflineAsrRecorder(context: Context) {
 
     fun release() {
         cancelRecording()
+        scope.cancel()
+    }
+
+    private fun computePcm16Rms(data: ByteArray, size: Int): Double {
+        var sum = 0.0
+        var sampleCount = 0
+        var index = 0
+        while (index + 1 < size) {
+            val sample = (data[index].toInt() and 0xFF) or (data[index + 1].toInt() shl 8)
+            sum += sample.toDouble() * sample
+            sampleCount++
+            index += 2
+        }
+        return if (sampleCount == 0) 0.0 else kotlin.math.sqrt(sum / sampleCount)
+    }
+}
+
+/**
+ * 仅在手机 AR 页可见期间使用的离线唤醒监听器。Sherpa 当前集成的是离线 ASR 而非
+ * 专用 KWS 模型，因此以短 PCM 窗口周期性识别，并将结果交给页面状态机判断唤醒词。
+ */
+private class MobileOfflineWakeWordListener(context: Context) {
+    private val appContext = context.applicationContext
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val outputLock = Any()
+    private var output = ByteArrayOutputStream()
+    private var audioRecord: AudioRecord? = null
+    private var captureJob: Job? = null
+    private var analysisJob: Job? = null
+
+    @Volatile
+    private var isListening = false
+
+    @Suppress("MissingPermission")
+    fun start(onRecognition: (String) -> Unit, onError: (String) -> Unit): String? {
+        if (isListening) return null
+        val minBufferSize = AudioRecord.getMinBufferSize(
+            MOBILE_ASR_SAMPLE_RATE,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
+        if (minBufferSize <= 0) return "当前设备无法打开麦克风"
+
+        val bufferSize = maxOf(minBufferSize, 4096)
+        val recorder = try {
+            AudioRecord(
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                MOBILE_ASR_SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                bufferSize
+            )
+        } catch (error: Exception) {
+            Log.w("PsopMobileWake", "Unable to create AudioRecord", error)
+            return "无法启动离线唤醒监听"
+        }
+        if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+            recorder.release()
+            return "当前设备无法初始化麦克风"
+        }
+
+        synchronized(outputLock) { output = ByteArrayOutputStream() }
+        audioRecord = recorder
+        return try {
+            recorder.startRecording()
+            if (recorder.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                recorder.release()
+                audioRecord = null
+                "离线唤醒监听未能启动"
+            } else {
+                isListening = true
+                captureJob = scope.launch {
+                    val buffer = ByteArray(bufferSize)
+                    while (isListening) {
+                        val size = recorder.read(buffer, 0, buffer.size)
+                        if (size > 0) {
+                            synchronized(outputLock) { output.write(buffer, 0, size) }
+                        } else if (size != AudioRecord.ERROR_INVALID_OPERATION && size != AudioRecord.ERROR_BAD_VALUE) {
+                            Log.w("PsopMobileWake", "AudioRecord read failed: $size")
+                        }
+                    }
+                }
+                analysisJob = scope.launch {
+                    delay(MOBILE_WAKE_ANALYSIS_INTERVAL_MS)
+                    while (isListening) {
+                        val text = recognizeWindow()
+                        if (text != null && isListening) {
+                            withContext(Dispatchers.Main.immediate) { onRecognition(text) }
+                        }
+                        delay(MOBILE_WAKE_ANALYSIS_INTERVAL_MS)
+                    }
+                }
+                null
+            }
+        } catch (error: Exception) {
+            Log.w("PsopMobileWake", "Unable to start AudioRecord", error)
+            recorder.release()
+            audioRecord = null
+            onError("无法启动离线唤醒监听")
+            "无法启动离线唤醒监听"
+        }
+    }
+
+    private suspend fun recognizeWindow(): String? {
+        val pcm = synchronized(outputLock) {
+            val captured = output.toByteArray()
+            if (captured.size < MOBILE_ASR_SAMPLE_RATE * 2) return null
+            // 保留末尾 0.4 秒，降低唤醒词刚好落在窗口边界时的漏识别概率。
+            val overlapBytes = minOf(captured.size, MOBILE_ASR_SAMPLE_RATE * 2 / 5)
+            output = ByteArrayOutputStream().apply {
+                write(captured, captured.size - overlapBytes, overlapBytes)
+            }
+            captured
+        }
+        if (computePcm16Rms(pcm, pcm.size) <= MOBILE_ASR_VOICE_RMS_THRESHOLD) return null
+        return mobileAsrRecognitionMutex.withLock {
+            if (!SherpaAsrEngine.initialize(appContext)) return@withLock null
+            SherpaAsrEngine.recognize(pcm).trim().takeIf { it.isNotBlank() }
+        }
+    }
+
+    fun discardBufferedAudio() {
+        synchronized(outputLock) { output = ByteArrayOutputStream() }
+    }
+
+    fun stop() {
+        if (!isListening && audioRecord == null) return
+        isListening = false
+        analysisJob?.cancel()
+        analysisJob = null
+        val recorder = audioRecord
+        audioRecord = null
+        runCatching { recorder?.stop() }
+        runCatching { recorder?.release() }
+        captureJob?.cancel()
+        captureJob = null
+        synchronized(outputLock) { output = ByteArrayOutputStream() }
+    }
+
+    fun release() {
+        stop()
         scope.cancel()
     }
 
@@ -777,14 +932,10 @@ fun PsopMobileHomeScreen(
 fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var showChat by rememberSaveable { mutableStateOf(false) }
     var isCaptureMode by rememberSaveable { mutableStateOf(false) }
-    var isConversationMode by rememberSaveable { mutableStateOf(false) }
     var modeSwipeDistance by remember { mutableFloatStateOf(0f) }
+    var arSwipeDistance by remember { mutableFloatStateOf(0f) }
     val selectedModeOffset by animateDpAsState(
-        targetValue = when {
-            isCaptureMode -> 52.dp
-            isConversationMode -> (-52).dp
-            else -> 0.dp
-        },
+        targetValue = if (isCaptureMode) 26.dp else (-26).dp,
         label = "mobileModeAlignment"
     )
     var captureStatus by remember { mutableStateOf<String?>(null) }
@@ -793,12 +944,12 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var arAiReply by remember { mutableStateOf<String?>(null) }
     val voiceModeInteraction = remember { MutableInteractionSource() }
     val captureModeInteraction = remember { MutableInteractionSource() }
-    val conversationModeInteraction = remember { MutableInteractionSource() }
     var captureFrame by remember { mutableStateOf<(() -> Bitmap?)?>(null) }
     var showCaptureFeedback by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val hapticView = LocalView.current
     val modeSwipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
+    val arSwipeThresholdPx = with(LocalDensity.current) { 72.dp.toPx() }
     val shutterSound = remember { MediaActionSound() }
     var hasCameraPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -821,16 +972,51 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     var voiceTouchStartY by remember { mutableFloatStateOf(0f) }
     val coroutineScope = rememberCoroutineScope()
     val offlineAsrRecorder = remember(context) { MobileOfflineAsrRecorder(context) }
+    val wakeWordListener = remember(context) { MobileOfflineWakeWordListener(context) }
+    var wakeListenerRestartSequence by remember { mutableStateOf(0) }
+    var wakeState by remember { mutableStateOf(MobileWakeState.WAITING_WAKE_WORD) }
+    var wakeCommandTimeoutJob by remember { mutableStateOf<Job?>(null) }
+    var lastHandledWakeText by remember { mutableStateOf("") }
+    var lastHandledWakeAt by remember { mutableStateOf(0L) }
     var partialAsrJob by remember { mutableStateOf<Job?>(null) }
+    val latestUiState by rememberUpdatedState(uiState)
+    val isCurrentTaskActive by rememberUpdatedState(isMobileTaskActive(uiState))
     val microphonePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasMicrophonePermission = granted
-        if (!granted) captureStatus = "需要麦克风权限才能语音提问"
+        if (!granted) captureStatus = "需要麦克风权限才能使用离线语音"
+    }
+    LaunchedEffect(Unit) {
+        if (!hasMicrophonePermission) microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    val lifecycleOwner = context as? LifecycleOwner
+    var isActivityForeground by remember(lifecycleOwner) {
+        mutableStateOf(lifecycleOwner?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true)
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        if (lifecycleOwner == null) return@DisposableEffect onDispose { }
+        val observer = LifecycleEventObserver { _, event ->
+            isActivityForeground = event == Lifecycle.Event.ON_RESUME ||
+                (event != Lifecycle.Event.ON_PAUSE && event != Lifecycle.Event.ON_STOP && event != Lifecycle.Event.ON_DESTROY &&
+                    lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    fun submitTextToPsop(text: String) {
+        arAiReply = null
+        isAwaitingAiReply = true
+        aiReplyBaselineCount = latestUiState.messages.size
+        viewModel.submitInput(text)
     }
 
     fun startVoiceRecognition() {
+        wakeWordListener.stop()
         val error = offlineAsrRecorder.start()
         if (error != null) {
             captureStatus = error
+            wakeListenerRestartSequence++
         } else {
             isListening = true
             isVoiceCancelArmed = false
@@ -870,10 +1056,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
             isRecognizingVoice = false
             result.text?.let { text ->
                 liveVoiceText = text
-                arAiReply = null
-                isAwaitingAiReply = true
-                aiReplyBaselineCount = uiState.messages.size
-                viewModel.submitInput(text)
+                submitTextToPsop(text)
                 captureStatus = null
             } ?: run {
                 captureStatus = result.error ?: "语音识别失败，请再试一次"
@@ -894,7 +1077,11 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     }
 
     fun captureAndUpload() {
-        val bitmap = captureFrame?.invoke() ?: return
+        val bitmap = captureFrame?.invoke()
+        if (bitmap == null) {
+            captureStatus = "相机尚未就绪，请稍后再试"
+            return
+        }
         val photoDir = File(context.cacheDir, "psop_mobile_photos").apply { mkdirs() }
         val photoFile = File.createTempFile("capture_", ".jpg", photoDir)
         photoFile.outputStream().use { output ->
@@ -909,8 +1096,81 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         captureStatus = "已拍摄，正在校验"
     }
 
-    LaunchedEffect(captureStatus) {
-        if (captureStatus != null && !isRecognizingVoice && !isListening) {
+    fun resetWakeCommand() {
+        wakeCommandTimeoutJob?.cancel()
+        wakeCommandTimeoutJob = null
+        wakeState = MobileWakeState.WAITING_WAKE_WORD
+        wakeWordListener.discardBufferedAudio()
+    }
+
+    fun waitForWakeCommand() {
+        wakeState = MobileWakeState.WAITING_COMMAND
+        captureStatus = "已唤醒，请说命令"
+        wakeCommandTimeoutJob?.cancel()
+        wakeCommandTimeoutJob = coroutineScope.launch {
+            delay(MOBILE_WAKE_COMMAND_TIMEOUT_MS)
+            if (wakeState == MobileWakeState.WAITING_COMMAND) {
+                resetWakeCommand()
+                captureStatus = "未收到命令，继续等待唤醒"
+            }
+        }
+    }
+
+    fun handleWakeRecognition(recognizedText: String) {
+        if (showChat || !isActivityForeground || !isCurrentTaskActive || !hasMicrophonePermission) return
+        val normalized = normalizeMobileSpeech(recognizedText)
+        if (normalized.isBlank()) return
+        val now = System.currentTimeMillis()
+        if (normalized == lastHandledWakeText && now - lastHandledWakeAt < 2_500L) return
+
+        val command = when (wakeState) {
+            MobileWakeState.WAITING_WAKE_WORD -> {
+                val wakeIndex = normalized.indexOf(MOBILE_WAKE_WORD)
+                if (wakeIndex < 0) return
+                normalized.removeRange(wakeIndex, wakeIndex + MOBILE_WAKE_WORD.length)
+            }
+            MobileWakeState.WAITING_COMMAND -> normalized.removePrefix(MOBILE_WAKE_WORD)
+        }
+        lastHandledWakeText = normalized
+        lastHandledWakeAt = now
+        if (command.isBlank()) {
+            waitForWakeCommand()
+            return
+        }
+
+        resetWakeCommand()
+        if (command == "拍照") {
+            captureStatus = "正在拍摄"
+            captureAndUpload()
+        } else {
+            submitTextToPsop(command)
+            captureStatus = "语音已提交"
+        }
+    }
+
+    val shouldListenForWakeWord = isActivityForeground &&
+        !showChat &&
+        isMobileTaskActive(uiState) &&
+        hasMicrophonePermission &&
+        !isListening &&
+        !isRecognizingVoice
+    val currentHandleWakeRecognition by rememberUpdatedState(newValue = { text: String ->
+        handleWakeRecognition(text)
+    })
+    LaunchedEffect(shouldListenForWakeWord, wakeListenerRestartSequence) {
+        if (shouldListenForWakeWord) {
+            wakeWordListener.start(
+                onRecognition = { text -> currentHandleWakeRecognition(text) },
+                onError = { error -> captureStatus = error }
+            )?.let { error -> captureStatus = error }
+        } else {
+            wakeWordListener.stop()
+            if (wakeState == MobileWakeState.WAITING_COMMAND) resetWakeCommand()
+        }
+    }
+
+    LaunchedEffect(captureStatus, wakeState) {
+        if (captureStatus != null && !isRecognizingVoice && !isListening && wakeState != MobileWakeState.WAITING_COMMAND) {
             delay(2400)
             captureStatus = null
         }
@@ -951,9 +1211,11 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         }
     }
 
-    DisposableEffect(offlineAsrRecorder, shutterSound) {
+    DisposableEffect(offlineAsrRecorder, wakeWordListener, shutterSound) {
         onDispose {
             offlineAsrRecorder.release()
+            wakeCommandTimeoutJob?.cancel()
+            wakeWordListener.release()
             shutterSound.release()
         }
     }
@@ -970,21 +1232,8 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
     val currentRequestMicrophonePermission by rememberUpdatedState(newValue = {
         microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     })
-    fun selectControlMode(index: Int) {
-        when (index) {
-            0 -> {
-                isCaptureMode = true
-                isConversationMode = false
-            }
-            1 -> {
-                isCaptureMode = false
-                isConversationMode = false
-            }
-            else -> {
-                isCaptureMode = false
-                isConversationMode = true
-            }
-        }
+    fun selectControlMode(captureMode: Boolean) {
+        isCaptureMode = captureMode
     }
 
     BackHandler {
@@ -1011,6 +1260,22 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
         } else {
             CameraPermissionContent(onRequestPermission = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) })
         }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 122.dp)
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { arSwipeDistance = 0f },
+                        onHorizontalDrag = { _, dragAmount -> arSwipeDistance += dragAmount },
+                        onDragEnd = {
+                            if (arSwipeDistance <= -arSwipeThresholdPx) showChat = true
+                            arSwipeDistance = 0f
+                        },
+                        onDragCancel = { arSwipeDistance = 0f }
+                    )
+                }
+        )
         if (showCaptureFeedback) {
             Box(
                 modifier = Modifier
@@ -1027,10 +1292,29 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp)
             )
         }
+        if (shouldListenForWakeWord) {
+            Surface(
+                color = Color(0xD9162A44),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, ArOverlayGreen),
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 16.dp)
+            ) {
+                Text(
+                    if (wakeState == MobileWakeState.WAITING_COMMAND) "已唤醒，请说命令" else "正在等待唤醒",
+                    color = ArOverlayGreen,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
+        }
         arAiReply?.let { reply ->
             ArAiReplyCard(
                 text = reply,
-                modifier = Modifier.align(Alignment.TopCenter).padding(start = 20.dp, end = 20.dp, top = 28.dp)
+                modifier = Modifier.align(Alignment.TopCenter).padding(
+                    start = 20.dp,
+                    end = 20.dp,
+                    top = if (shouldListenForWakeWord) 60.dp else 28.dp
+                )
             )
         }
         captureStatus?.let { status ->
@@ -1061,23 +1345,18 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     modifier = Modifier
                         .offset(x = selectedModeOffset)
                         .padding(bottom = 12.dp)
-                        .pointerInput(isCaptureMode, isConversationMode) {
+                        .pointerInput(isCaptureMode) {
                             detectHorizontalDragGestures(
                                 onDragStart = { modeSwipeDistance = 0f },
                                 onHorizontalDrag = { _, dragAmount ->
                                     modeSwipeDistance += dragAmount
                                 },
                                 onDragEnd = {
-                                    val currentIndex = when {
-                                        isCaptureMode -> 0
-                                        isConversationMode -> 2
-                                        else -> 1
-                                    }
                                     when {
                                         modeSwipeDistance <= -modeSwipeThresholdPx ->
-                                            selectControlMode((currentIndex + 1).coerceAtMost(2))
+                                            selectControlMode(false)
                                         modeSwipeDistance >= modeSwipeThresholdPx ->
-                                            selectControlMode((currentIndex - 1).coerceAtLeast(0))
+                                            selectControlMode(true)
                                     }
                                     modeSwipeDistance = 0f
                                 },
@@ -1091,21 +1370,14 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                         color = if (isCaptureMode) MobileModeAccent else Color(0xFFB8C4D6),
                         fontSize = 13.sp,
                         fontWeight = if (isCaptureMode) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.clickable(interactionSource = captureModeInteraction, indication = null) { selectControlMode(0) }
+                        modifier = Modifier.clickable(interactionSource = captureModeInteraction, indication = null) { selectControlMode(true) }
                     )
                     Text(
                         "语音",
-                        color = if (!isCaptureMode && !isConversationMode) MobileModeAccent else Color(0xFFB8C4D6),
+                        color = if (!isCaptureMode) MobileModeAccent else Color(0xFFB8C4D6),
                         fontSize = 13.sp,
-                        fontWeight = if (!isCaptureMode && !isConversationMode) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.clickable(interactionSource = voiceModeInteraction, indication = null) { selectControlMode(1) }
-                    )
-                    Text(
-                        "会话",
-                        color = if (isConversationMode) MobileModeAccent else Color(0xFFB8C4D6),
-                        fontSize = 13.sp,
-                        fontWeight = if (isConversationMode) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.clickable(interactionSource = conversationModeInteraction, indication = null) { selectControlMode(2) }
+                        fontWeight = if (!isCaptureMode) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.clickable(interactionSource = voiceModeInteraction, indication = null) { selectControlMode(false) }
                     )
                 }
             Box(modifier = Modifier.fillMaxWidth()) {
@@ -1119,15 +1391,7 @@ fun MobileArTaskScreen(viewModel: PsopDemoViewModel, uiState: PsopDemoUiState) {
                     shadowElevation = 8.dp,
                     modifier = Modifier.size(62.dp).align(Alignment.Center)
                 ) {
-                    if (isConversationMode) {
-                        IconButton(onClick = { showChat = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Send,
-                                contentDescription = "进入会话",
-                                tint = Color.White
-                            )
-                        }
-                    } else if (isCaptureMode) {
+                    if (isCaptureMode) {
                         IconButton(
                             onClick = {
                                 if (hasCameraPermission) captureAndUpload() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
@@ -1411,8 +1675,23 @@ internal fun MobileTaskChatScreen(
     BackHandler(onBack = onBack)
     var input by remember { mutableStateOf("") }
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
+    var swipeDistance by remember { mutableFloatStateOf(0f) }
+    val swipeThresholdPx = with(LocalDensity.current) { 72.dp.toPx() }
     val isActiveMobileTask = isMobileTaskActive(uiState)
     Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { swipeDistance = 0f },
+                    onHorizontalDrag = { _, dragAmount -> swipeDistance += dragAmount },
+                    onDragEnd = {
+                        if (swipeDistance >= swipeThresholdPx) onBack()
+                        swipeDistance = 0f
+                    },
+                    onDragCancel = { swipeDistance = 0f }
+                )
+            },
         topBar = {
             TopAppBar(
                 title = { Text(uiState.selectedSkill?.name ?: "PSOP 任务助手") },
