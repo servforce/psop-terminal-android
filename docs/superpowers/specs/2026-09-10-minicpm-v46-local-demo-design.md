@@ -12,21 +12,49 @@
 - 点击选项进入独立的 Compose 演示 Activity，返回时回到 SDK 调试功能菜单。
 - 支持从手机相册选择单张图片、使用手机摄像头拍照、输入文字并查看流式回复。
 - 支持纯文字提问、图文提问、停止生成和清空当前会话。
-- 使用 OpenBMB 官方 MiniCPM-V 4.6 GGUF 权重及其 Android `llama.cpp` 适配代码。
+- 使用 OpenBMB 官方 MiniCPM-V 4.6 GGUF 权重及其 Android `llama.cpp-omni` 适配代码。
 - 模型权重随本地调试 APK 打包，首次进入演示页时释放到 App 私有文件目录。
 
 首版不支持视频、多图同时输入、语音输入、模型联网下载、模型切换、后台持续推理或接入 PSOP 巡检流程。
 
 ## 方案选择
 
-采用“官方 GGUF + `llama.cpp` JNI + 模型随 APK 打包”方案：
+采用“官方 GGUF + `llama.cpp-omni` JNI + 模型随 APK 打包”方案：
 
 - 语言模型使用 `MiniCPM-V-4_6-Q4_K_M.gguf`，约 0.5 GB。
 - 视觉模型使用 `mmproj-model-f16.gguf`，约 1.1 GB。
-- Android 端适配以 OpenBMB 官方 `MiniCPM-V-Apps` 为基线，保留其 MiniCPM-V 4.6 提示词模板和必要的 `llama.cpp` 扩展。
-- 模型源为 OpenBMB 官方 MiniCPM-V 4.6 GGUF 仓库；集成时固定所用仓库 revision，并记录两个文件的大小和 SHA-256。
+- Android 端适配以 OpenBMB 官方 `MiniCPM-V-Apps` 为基线，保留其 MiniCPM-V 4.6 提示词模板和必要的 `llama.cpp-omni` 扩展。
+- 模型源为 OpenBMB 官方 MiniCPM-V 4.6 GGUF 仓库，使用下文固定的 revision、文件大小和 SHA-256。
 
-不选用联网模型管理器，因为首版只要求本地跑通；不选用 MNN 或 ONNX 转换，因为官方已有可复用的 Android `llama.cpp` 端侧适配；不单独安装官方 Demo APK，因为入口需要位于当前 App 的 SDK 调试菜单中。
+不选用联网模型管理器，因为首版只要求本地跑通；不选用 MNN 或 ONNX 转换，因为官方已有可复用的 Android `llama.cpp-omni` 端侧适配；不单独安装官方 Demo APK，因为入口需要位于当前 App 的 SDK 调试菜单中。
+
+## 固定依赖与目标设备
+
+为保证实现期间上游代码和模型格式不漂移，首版固定以下版本：
+
+- OpenBMB `MiniCPM-V-Apps`：`cf4f55c36f6d5496b27c2546c07e936b4b930935`。
+- `tc-mb/llama.cpp-omni`：`64d092c60db4b4ee45768476bd752f03fdcc98ea`。
+- OpenBMB `MiniCPM-V-4.6-gguf`：`afe9accb78d2995d214cd912920c9c92f4015faa`。
+- Android NDK：`27.0.12077973`。
+- CMake：`4.1.2`。
+
+模型资产固定为：
+
+| 文件 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MiniCPM-V-4_6-Q4_K_M.gguf` | 529101504 | `6b0c74962c44bc6bf4b655b9b02c13eda9d5a0491543ae976d1ac18e4b7892e2` |
+| `mmproj-model-f16.gguf` | 1108746944 | `ca931d861d0801d9003e50697cd764721a334107c0e0415a51168ee1938462de` |
+
+目标测试机为小米 11 青春版，Snapdragon 780G、`arm64-v8a`。该机型存在 6 GB 和 8 GB 内存版本，因此不能只按商品型号假设内存大小；演示页启动时通过系统 API 读取实际总内存和当前可用内存。6 GB 版本视为最低可运行配置，测试前关闭其他高内存应用。
+
+首版只编译通用 `arm64-v8a` CPU 路径，不打包或加载官方额外的 ARMv8.6 `i8mm/bf16` 优化库。Snapdragon 780G 不作为 ARMv8.6 目标处理。完成正确性验证后，可以单独评估针对该设备指令集的优化构建，但优化不属于本次跑通条件。
+
+原生源码采用以下落地方式：
+
+- `llama.cpp-omni` 作为固定 commit 的 Git submodule 放入 `third_party/`。
+- 从固定版本的 `MiniCPM-V-Apps` 引入 Android JNI 核心实现及必要辅助代码，并在当前仓库内保留来源、commit 和许可证说明。
+- 当前 App 增加自己的薄 Kotlin/native 封装，业务页面不直接依赖官方 Demo 的 Activity、View 或模型下载器。
+- 不直接复制官方 Demo 的完整 Gradle 工程，避免把无关的模型管理、传统 View UI 和 TTS 能力带入当前 App。
 
 ## 页面与交互
 
@@ -83,7 +111,7 @@ ViewModel 维护以下单向状态：
 - 出现损坏时只重建损坏文件，不删除其他 App 数据。
 - 权重文件加入 Git 忽略规则；仓库只保留目录说明、官方下载位置、固定 revision、期望文件名及校验信息。
 
-Gradle 对 `.gguf` 使用 `noCompress`，避免构建阶段压缩已经量化的超大权重。由于 `llama.cpp` 需要普通文件路径，权重不能直接留在 APK assets 中供推理，首次使用必须复制到 App 私有目录。
+Gradle 对 `.gguf` 使用 `noCompress`，避免构建阶段压缩已经量化的超大权重。由于 `llama.cpp-omni` 需要普通文件路径，权重不能直接留在 APK assets 中供推理，首次使用必须复制到 App 私有目录。
 
 ### `MiniCpmEngine`
 
@@ -95,9 +123,9 @@ Kotlin 层通过接口隔离 native 实现，接口提供：
 - `clearConversation()`；
 - `close()`。
 
-JNI 层持有 `llama.cpp` model、context、multimodal projector 和采样器资源。所有回调切回 Kotlin 前检查任务代次，已取消或已被新任务替换的 token 不再写入 UI。
+JNI 层持有 `llama.cpp-omni` model、context、multimodal projector 和采样器资源。所有回调切回 Kotlin 前检查任务代次，已取消或已被新任务替换的 token 不再写入 UI。
 
-默认上下文窗口为 4096 tokens。首版使用 CPU 推理和官方推荐线程策略，不承诺 GPU/NPU 加速；线程数在实机基准后选取一个兼顾速度与温升的固定默认值。
+默认上下文窗口为 4096 tokens，单轮最多生成 512 tokens。首版使用 CPU 推理，不承诺 GPU/NPU 加速；默认线程数取可用处理器数与 4 的较小值，实机基准后仅在有明确收益时调整。
 
 ## 数据流
 
@@ -121,11 +149,19 @@ JNI 层持有 `llama.cpp` model、context、multimodal projector 和采样器资
 ## 构建与模型资产
 
 - 首期 APK 只包含 `arm64-v8a` native 库。
+- 开始 native 构建前，在开发环境安装并锁定 NDK `27.0.12077973` 和 CMake `4.1.2`；当前开发环境尚未安装这两项，属于编码前置准备。
 - 本地构建前需要把两个官方权重放入约定的 assets 目录；缺少权重时构建仍可用于普通功能，但演示页必须显示“模型资产缺失”及所需文件名。
 - 模型总计约 1.6 GB，调试 APK 会相应增大。
 - 安装及首次释放期间 APK、安装临时文件和释放后的模型可能同时存在，测试手机建议至少预留 5 GB 可用空间。
 - 首版仅通过本地 `adb install` 分发，不处理 Play 商店、应用市场或增量更新限制。
-- 保留 OpenBMB、MiniCPM-V 和所用 `llama.cpp` 代码的许可证及来源声明。
+- 保留 OpenBMB、MiniCPM-V 和所用 `llama.cpp-omni` 代码的许可证及来源声明。
+
+构建验证分为两个阶段：
+
+1. 不放入 GGUF 权重，先验证 submodule、CMake、JNI、`arm64-v8a` native 库加载和普通 APK 安装，排除工具链及符号问题。
+2. 放入两个已校验权重，构建超大 APK，单独验证 aapt2 打包、APK 签名、`adb install`、assets 释放和模型加载。
+
+只有第二阶段的离线图文问答通过，才视为端侧部署跑通；第一阶段不能替代最终验收。
 
 ## 错误处理
 
@@ -151,6 +187,7 @@ JNI 层持有 `llama.cpp` model、context、multimodal projector 和采样器资
 - 连续更换图片和完成多轮对话不发生 native 崩溃或明显内存持续增长。
 - 返回菜单后 native 模型资源最终释放。
 - 记录目标手机的模型释放时间、加载时间、首 token 延迟、生成速度、峰值内存与连续运行温升。
+- 在目标手机上记录系统报告的实际 RAM 容量、ABI 与 CPU feature 检测结果，确认运行的是通用 arm64 CPU 库而非 ARMv8.6 优化库。
 - 现有 PSOP、WebSocket、眼镜连接、离线 ASR 和离线 TTS 功能可正常编译和使用。
 
 ## 后续扩展边界
