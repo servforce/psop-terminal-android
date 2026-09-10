@@ -32,8 +32,8 @@
 
 为保证实现期间上游代码和模型格式不漂移，首版固定以下版本：
 
-- OpenBMB `MiniCPM-V-Apps`：`cf4f55c36f6d5496b27c2546c07e936b4b930935`。
-- `tc-mb/llama.cpp-omni`：`64d092c60db4b4ee45768476bd752f03fdcc98ea`。
+- OpenBMB `MiniCPM-V-Apps`：`cf4ebedde4fb9d7d6b7fc76c7f312018493c0b59`。
+- `tc-mb/llama.cpp-omni`：`bebcf1676fe90db4dd9b4e9764d89e48ed52bdd9`（与上述 `MiniCPM-V-Apps` commit 的 gitlink 完全一致）。
 - OpenBMB `MiniCPM-V-4.6-gguf`：`afe9accb78d2995d214cd912920c9c92f4015faa`。
 - Android NDK：`27.0.12077973`。
 - CMake：`4.1.2`。
@@ -45,7 +45,7 @@
 | `MiniCPM-V-4_6-Q4_K_M.gguf` | 529101504 | `6b0c74962c44bc6bf4b655b9b02c13eda9d5a0491543ae976d1ac18e4b7892e2` |
 | `mmproj-model-f16.gguf` | 1108746944 | `ca931d861d0801d9003e50697cd764721a334107c0e0415a51168ee1938462de` |
 
-目标测试机为小米 11 青春版，Snapdragon 780G、`arm64-v8a`。该机型存在 6 GB 和 8 GB 内存版本，因此不能只按商品型号假设内存大小；演示页启动时通过系统 API 读取实际总内存和当前可用内存。6 GB 版本视为最低可运行配置，测试前关闭其他高内存应用。
+目标测试机为 8 GB RAM 的小米 11 青春版，Snapdragon 780G、`arm64-v8a`。演示页仍通过系统 API 记录实际总内存和当前可用内存，加载前不足时提示关闭其他高内存应用。
 
 首版只编译通用 `arm64-v8a` CPU 路径，不打包或加载官方额外的 ARMv8.6 `i8mm/bf16` 优化库。Snapdragon 780G 不作为 ARMv8.6 目标处理。完成正确性验证后，可以单独评估针对该设备指令集的优化构建，但优化不属于本次跑通条件。
 
@@ -118,14 +118,17 @@ Gradle 对 `.gguf` 使用 `noCompress`，避免构建阶段压缩已经量化的
 Kotlin 层通过接口隔离 native 实现，接口提供：
 
 - `load(modelPath, mmprojPath, config)`；
-- `generate(messages, image, onToken)`；
+- `prefillImage(imageBytes)`；
+- `generate(userPrompt, maxTokens, onToken)`；
 - `cancelGeneration()`；
 - `clearConversation()`；
 - `close()`。
 
-JNI 层持有 `llama.cpp-omni` model、context、multimodal projector 和采样器资源。所有回调切回 Kotlin 前检查任务代次，已取消或已被新任务替换的 token 不再写入 UI。
+JNI 层持有 `llama.cpp-omni` model、context、multimodal projector、原生对话上下文和采样器资源。Kotlin 消息列表只用于 UI 展示，每轮只把可选图片和本轮用户文字增量送入 native；不在每轮重放完整历史。所有回调切回 Kotlin 前检查任务代次，已取消或已被新任务替换的 token 不再写入 UI。
 
-默认上下文窗口为 4096 tokens，单轮最多生成 512 tokens。首版使用 CPU 推理，不承诺 GPU/NPU 加速；默认线程数取可用处理器数与 4 的较小值，实机基准后仅在有明确收益时调整。
+MiniCPM-V 4.6 按固定官方实现使用 8192-token 上下文，单轮最多生成 512 tokens。首版关闭 thinking，不注入默认英文 system prompt，沿用官方 MiniCPM-V 4.6 ChatML 模板，保证中文提问不会被默认提示词引导为英文。图片切片上限固定为 1，优先降低 Snapdragon 780G 上的图像预填充耗时；提高切片数属于后续画质优化。
+
+首版使用 CPU 推理，不承诺 GPU/NPU 加速；默认使用 4 个推理线程，与固定版本的官方 Android JNI 默认值一致，实机基准后仅在有明确收益时调整。
 
 ## 数据流
 
@@ -134,8 +137,8 @@ JNI 层持有 `llama.cpp-omni` model、context、multimodal projector 和采样�
 3. 安装器按需从 assets 释放并校验两个 GGUF 文件。
 4. ViewModel 在 native 单线程上加载模型。
 5. 用户选图或拍照，Kotlin 层校正 EXIF 方向并生成受控尺寸的推理输入和 UI 缩略图。
-6. 用户发送问题，ViewModel 固化本轮消息和图片，调用 `MiniCpmEngine.generate`。
-7. JNI 完成图像编码与文本生成，并通过回调流式返回 token。
+6. 用户发送问题，ViewModel 固化本轮消息和图片；有图片时先调用 `MiniCpmEngine.prefillImage`，随后调用 `generate` 发送本轮文字。
+7. JNI 完成可选的图像编码与文本生成，并通过回调流式返回 token。
 8. ViewModel 合并 token 更新当前回复；完成、取消或失败后恢复可发送状态。
 
 ## 图片与内存控制
