@@ -28,6 +28,7 @@ ISSUE-*.md
 
 # Large binary assets (download separately)
 app/libs/*.aar
+app/src/main/assets/minicpm-v-4.6/*.gguf
 app/src/main/assets/sherpa-models/*.onnx
 
 # Versioned offline phone TTS runtime and Chinese voice model.

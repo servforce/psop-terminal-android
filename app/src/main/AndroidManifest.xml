@@ -49,6 +49,12 @@
             android:label="服务器设置"
             android:theme="@style/Theme.CXRMSamples" />
         <activity
+            android:name=".activities.minicpm.MiniCpmDemoActivity"
+            android:exported="false"
+            android:label="@string/usage_minicpm_v46"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.CXRMSamples" />
+        <activity
             android:name=".activities.psopDemo.PsopDemoActivity"
             android:exported="false"
             android:label="PSOP 智能作业"

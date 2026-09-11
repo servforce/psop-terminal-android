@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -60,7 +62,10 @@ fun UsageSelectionScreen(onClick: (UsageType) -> Unit) {
             modifier = Modifier.fillMaxSize(),
             alpha = 0.3f
         )
-        Column(modifier = Modifier.fillMaxWidth(0.8f),
+        Column(modifier = Modifier
+            .fillMaxWidth(0.8f)
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 48.dp),
 
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center) {
@@ -128,6 +133,12 @@ fun UsageSelectionScreen(onClick: (UsageType) -> Unit) {
                 onClick(UsageType.USAGE_TYPE_AI)
             }) {
                 Text(text = stringResource(R.string.usage_ai_scene))
+            }
+
+            Button(modifier = Modifier.fillMaxWidth(), onClick = {
+                onClick(UsageType.USAGE_TYPE_MINICPM_V46)
+            }) {
+                Text(text = stringResource(R.string.usage_minicpm_v46))
             }
 
             Button(modifier = Modifier.fillMaxWidth(), onClick = {

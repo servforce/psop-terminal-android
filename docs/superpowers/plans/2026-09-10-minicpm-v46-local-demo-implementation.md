@@ -25,15 +25,14 @@
 - `.gitmodules`
 - `third_party/llama.cpp-omni/`
 - `third_party/minicpm-v46/UPSTREAM.md`
-- `third_party/minicpm-v46/LICENSES/`
 
 步骤：
 
 1. 使用 `git ls-remote` 分别确认 `MiniCPM-V-Apps` 与 `llama.cpp-omni` 固定 commit 存在。
 2. 将 `tc-mb/llama.cpp-omni` 添加为 `third_party/llama.cpp-omni` submodule，并 checkout 到固定 commit。
-3. 从固定 commit 的 `MiniCPM-V-Apps` 读取 Android `llama_jni.cpp`、`logging.h`、`LlamaEngine.kt` 和 `CpuFeatures.kt`，只作为移植基线，不复制下载器、传统 View 页面、视频或 TTS 代码。
-4. 在 `UPSTREAM.md` 记录仓库 URL、commit、取用文件、局部修改点和许可证。
-5. 保存上游 Apache-2.0 等许可证文件。
+3. 从固定 commit 的 `MiniCPM-V-Apps` 核对 Android JNI 状态机和提示词行为，只作为兼容性参考。
+4. 由于该固定 commit 没有根许可证文件，不逐字复制它的源码；JNI 使用 MIT 许可的 `llama.cpp-omni` API 独立实现。
+5. 在 `UPSTREAM.md` 记录仓库 URL、commit、参考范围、未复制原因和模型卡声明的 Apache-2.0 许可。
 
 验证：
 
@@ -82,7 +81,7 @@
 
 步骤：
 
-1. 以固定上游 `llama_jni.cpp` 为基线创建项目自己的 JNI 文件。
+1. 使用固定 `llama.cpp-omni` 的公开 C/C++ API独立创建项目自己的 JNI 文件，并以固定官方 Demo 的输入输出行为做兼容性核对。
 2. 将 JNI 符号绑定到 `com.rokid.cxrmsamples.minicpm.NativeMiniCpmBridge`，不保留 `com.example` 包名。
 3. 只保留 MiniCPM-V 4.6 所需接口：backend 初始化、语言模型加载、mmproj 加载、版本设为 46、prepare、图片预填充、用户提示、逐 token 生成、取消、清空、卸载和 shutdown。
 4. 删除上游模型下载、视频和 VoxCPM/TTS 相关 native 接口及链接目标。

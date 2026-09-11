@@ -9,6 +9,7 @@ import com.rokid.cxrmsamples.activities.customProtocol.CustomProtocolActivity
 import com.rokid.cxrmsamples.activities.customView.CustomViewActivity
 import com.rokid.cxrmsamples.activities.deviceInformation.DeviceInformationActivity
 import com.rokid.cxrmsamples.activities.mediaFile.MediaFileActivity
+import com.rokid.cxrmsamples.activities.minicpm.MiniCpmDemoActivity
 import com.rokid.cxrmsamples.activities.p2pStabilityTest.P2pStabilityTestActivity
 import com.rokid.cxrmsamples.activities.picture.PictureActivity
 import com.rokid.cxrmsamples.activities.useAIScene.AISceneActivity
@@ -37,6 +38,9 @@ class UsageSelectionViewModel: ViewModel() {
             }
             UsageType.USAGE_TYPE_AI -> {
                 context.startActivity(Intent(context, AISceneActivity::class.java))
+            }
+            UsageType.USAGE_TYPE_MINICPM_V46 -> {
+                context.startActivity(Intent(context, MiniCpmDemoActivity::class.java))
             }
             UsageType.USAGE_CUSTOM_VIEW -> {
                 context.startActivity(Intent(context, CustomViewActivity::class.java))

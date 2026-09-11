@@ -40,6 +40,7 @@
     <string name="usage_self_view">自定义页面</string>
     <string name="usage_custom_protocol">自定义协议</string>
     <string name="usage_ai_scene">AI 场景</string>
+    <string name="usage_minicpm_v46">MiniCPM-V 4.6 本地演示</string>
     <string name="usage_teleprompter_scene">提词器场景</string>
     <string name="usage_translation_scene">翻译场景</string>
     <string name="usage_tts_notifiction">TTS 与通知</string>
