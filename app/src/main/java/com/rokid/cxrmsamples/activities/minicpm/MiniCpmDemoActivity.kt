@@ -19,8 +19,7 @@ class MiniCpmDemoActivity : ComponentActivity() {
 
     private val galleryLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent(),
-        viewModel::selectImage,
-    )
+    ) { uri -> viewModel.selectImage(uri) }
 
     private val cameraLauncher = registerForActivityResult(
         ActivityResultContracts.TakePicture(),
